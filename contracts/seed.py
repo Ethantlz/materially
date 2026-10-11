@@ -35,7 +35,8 @@ EWO_TASKS = ("price_extra", "base_scope_check", "backcharge")
 # off. A wall type reads longer than a draft, so PARSE keeps FAST's switches with a 1500-token cap; a server that
 # reasons anyway burns the 30 s timeout and fails fast into the Sonnet retry.
 PARSE = {"extra_body": FAST["extra_body"], "timeout_s": 30, "max_tokens": 1500}
-PARAMS = {"parse_partition": PARSE, **{task: FAST for task in EWO_TASKS}}
+# Product sheets too: reading one took 8 s with reasoning on and 0.6 s off (same valid JSON), and a pull reads several.
+PARAMS = {"parse_partition": PARSE, "extract_product_attrs": FAST, **{task: FAST for task in EWO_TASKS}}
 
 MODEL_POLICY = [
     {"task": task, "tier": "quick", "model": DEEPSEEK, "retry_model": SONNET, "enabled": True,

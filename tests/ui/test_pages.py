@@ -661,3 +661,16 @@ console.log(JSON.stringify({
         assert out[name] == {"prevented": False, "calls": []}, name
     assert out["hformEsc"] == {"prevented": True, "calls": ["renderConds"]}  # the + Height form's Esc / Enter handling is untouched
     assert out["hformEnter"] == {"prevented": False, "calls": []}
+
+
+def test_the_condition_page_shows_the_products_its_materials_link_to(client, mock_db):
+    """A product first found for another condition (the same search in the same project) still shows here."""
+    from contracts.samples import CONDITION_ID
+    pid = mock_db.product_data.insert_one({"query_hash": "x", "condition_id": "elsewhere", "component": "someone-elses-key",
+                                           "title": "Linked from this condition", "attrs": {}, "spec_check": {}, "checked": True}).inserted_id
+    cond = mock_db.conditions.find_one({"_id": CONDITION_ID})
+    mats = cond["materials"]
+    mats[0]["product_id"] = str(pid)
+    mock_db.conditions.update_one({"_id": CONDITION_ID}, {"$set": {"materials": mats}})
+    page = client.get(f"/conditions/{CONDITION_ID}").text
+    assert "Linked from this condition" in page and f"<td>{mats[0]['key']}</td>" in page and "someone-elses-key" not in page

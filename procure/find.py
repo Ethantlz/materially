@@ -1,6 +1,7 @@
 """Product data for a condition's materials: one Firecrawl (v2) search per material, limited to the supplier sites on
-the company's list (procure.sources; none = the open web) and cached by query + supplier list, so a repeat search makes
-no Firecrawl call. Attributes are read by run_task; each specified attribute is checked by Jev. The paid search is
+the company's list (procure.sources; none = the open web). One doc per condition and material, cached by query +
+supplier list: a repeat pull makes no Firecrawl call, the same search in the same project is reused, a new project
+searches afresh. Attributes are read by run_task; each specified attribute is checked by Jev. The paid search is
 saved before the Jev checks, so a failed check leaves an unchecked doc rather than a lost search."""
 import hashlib
 import logging
@@ -83,8 +84,9 @@ def _http_url(url) -> str | None:
     return url if isinstance(url, str) and re.match(r"https?://", url) else None
 
 
-def _hash(query: str, domains: list[str]) -> str:
-    return hashlib.sha1((query.lower() + "|" + ",".join(sorted(domains))).encode()).hexdigest()
+def _hash(query: str, domains: list[str], scope: str = "") -> str:
+    """The cache key of one search: the query and supplier list, within a scope ("condition:<id>" or "job:<id>")."""
+    return hashlib.sha1((query.lower() + "|" + ",".join(sorted(domains)) + (f"|{scope}" if scope else "")).encode()).hexdigest()
 
 
 def _search(query: str, domains=()) -> list[dict]:
@@ -162,21 +164,29 @@ def find_for_material(condition_id: str, key: str) -> dict:
         raise LookupError(f"No material {key!r} on this condition.")
     query = query_for(material)
     domains = sorted({s["domain"] for s in sources.list_sources()})  # no suppliers yet = the open web
-    qhash = _hash(query, domains)
+    # One doc per condition and material: its spec checks are against this condition's material, and a new project
+    # searches afresh instead of showing another project's results. The same search earlier in this project is
+    # reused (search_key), so a board that six wall types share costs one Firecrawl search.
+    qhash, skey = _hash(query, domains, f"condition:{condition_id}"), _hash(query, domains, f"job:{cond.get('job_id')}")
     doc = db.product_data.find_one({"query_hash": qhash})
     if doc is None:
-        if not _key():
-            raise Unavailable("Product search needs a Firecrawl key (FIRECRAWL_API_KEY in Infisical).")
-        pages = _search(query, domains)
-        if not pages:
-            raise LookupError(f"No product data found for {query!r}.")
-        top = next((p for p in pages if p.get("markdown")), pages[0])
-        try:
-            attrs = _attrs(f"{top.get('title') or ''}\n{top.get('markdown') or top.get('description') or ''}", cond.get("job_id"))
-        except TaskFailed as e:
-            raise LookupError(f"Couldn't read the product sheet: {e.reason}") from None
+        found = db.product_data.find_one({"search_key": skey})
+        if found:
+            url, title, attrs = found.get("url"), found.get("title"), found.get("attrs") or {}
+        else:
+            if not _key():
+                raise Unavailable("Product search needs a Firecrawl key (FIRECRAWL_API_KEY in Infisical).")
+            pages = _search(query, domains)
+            if not pages:
+                raise LookupError(f"No product data found for {query!r}.")
+            top = next((p for p in pages if p.get("markdown")), pages[0])
+            try:
+                attrs = _attrs(f"{top.get('title') or ''}\n{top.get('markdown') or top.get('description') or ''}", cond.get("job_id"))
+            except TaskFailed as e:
+                raise LookupError(f"Couldn't read the product sheet: {e.reason}") from None
+            url, title = _http_url(top.get("url")), top.get("title")
         # Saved before the Jev checks: a failed check must not throw away a search that was paid for.
-        doc = {"query_hash": qhash, "condition_id": condition_id, "component": key, "url": _http_url(top.get("url")), "title": top.get("title"),
+        doc = {"query_hash": qhash, "search_key": skey, "condition_id": condition_id, "component": key, "url": url, "title": title,
                "domains": domains, "attrs": attrs, "spec_check": {}, "checked": False, "fetched_at": now()}
         try:
             doc["_id"] = db.product_data.insert_one(doc).inserted_id

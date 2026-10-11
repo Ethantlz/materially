@@ -186,7 +186,11 @@ def condition_page(request: Request, condition_id: str):
     cond = jsonable(cond)
     job = _job(db, cond["job_id"])
     sheet = db.sheets.find_one({"_id": oid((cond.get("source") or {}).get("sheet"))})
-    products = jsonable(list(db.product_data.find({"condition_id": condition_id}).sort("component", 1)))
+    # products found for this condition and those its materials link to (a search reused from another condition in
+    # the project), each labelled with this condition's material key
+    links = {m["product_id"]: m["key"] for m in cond.get("materials") or [] if m.get("product_id")}
+    found = jsonable(list(db.product_data.find({"$or": [{"condition_id": condition_id}, {"_id": {"$in": [oid(i) for i in links if oid(i)]}}]})))
+    products = sorted(({**p, "component": links.get(p["id"], p.get("component"))} for p in found), key=lambda p: p["component"] or "")
     orders = jsonable(list(db.orders.find({"condition_id": condition_id}).sort("_id", -1)))
     view = next((v for v in _conditions(db, cond["job_id"]) if v["id"] == condition_id), None)
     return _page(request, "condition.html", job, "conditions", c=cond, v=view, sheet=jsonable(sheet), products=products,

@@ -55,6 +55,28 @@ def test_second_search_for_the_same_material_is_a_cache_hit(cid, mock_db, monkey
     assert cond["materials"][0]["product_id"] == a["id"]
 
 
+def test_another_condition_in_the_project_reuses_the_search_but_gets_its_own_product_and_checks(cid, mock_db, monkeypatch):
+    calls, checked = [], []
+    _wire(monkeypatch, calls)
+    monkeypatch.setattr(find, "_p_mismatch", lambda material, attrs, attr, job_id: checked.append(material["desc"]) or 0.05)
+    other = str(mock_db.conditions.insert_one({"type_tag": "SC4", "job_id": "j", "materials": [{**BOARD, "desc": "SC4 board"}]}).inserted_id)
+    a = find.find_for_material(cid, KEY)
+    b = find.find_for_material(other, KEY)
+    assert len(calls) == 1, "the same search in the same project costs one Firecrawl call"
+    assert a["id"] != b["id"] and (a["condition_id"], b["condition_id"]) == (cid, other) and b["url"] == a["url"]
+    assert "SC4 board" in checked, "checked against its own condition's material"
+    assert mock_db.conditions.find_one({"_id": ObjectId(other)})["materials"][0]["product_id"] == b["id"]
+
+
+def test_a_new_project_searches_afresh(cid, mock_db, monkeypatch):
+    calls = []
+    _wire(monkeypatch, calls)
+    find.find_for_material(cid, KEY)
+    fresh = str(mock_db.conditions.insert_one({**SA4, "job_id": "another-project"}).inserted_id)
+    find.find_for_material(fresh, KEY)
+    assert len(calls) == 2, "another project's results are never shown as this one's"
+
+
 # ---- the query: built from attributes, never the stud spacing ----
 def test_query_reads_like_a_supplier_search():
     assert find.query_for(BOARD) == '5/8" Type X gypsum board'
@@ -277,7 +299,7 @@ def test_procure_all_pulls_every_material(client, cid, mock_db, monkeypatch):
 
 def test_a_raced_insert_falls_back_to_the_cached_doc(cid, mock_db, monkeypatch):
     """Two searches for the same query at once: query_hash is unique, so the loser re-reads the winner's doc."""
-    h = qhash(find.query_for(BOARD))
+    h = find._hash(find.query_for(BOARD), [], f"condition:{cid}")
 
     def racing_search(_query, _domains=()):
         mock_db.product_data.insert_one({"_id": ObjectId(), "query_hash": h, "url": "https://winner.example.com", "fetched_at": NOW})
@@ -360,7 +382,7 @@ def test_cache_hit_while_the_supplier_list_is_unchanged(cid, mock_db, monkeypatc
     b = find.find_for_material(cid, KEY)
     assert calls == [('5/8" Type X gypsum board', ["a-supply.com", "b-supply.com"])]  # sorted, www. stripped
     assert a["id"] == b["id"] and a["domains"] == ["a-supply.com", "b-supply.com"]
-    assert mock_db.product_data.find_one({})["query_hash"] == qhash('5/8" Type X gypsum board', ["b-supply.com", "a-supply.com"])
+    assert mock_db.product_data.find_one({})["query_hash"] == find._hash('5/8" Type X gypsum board', ["b-supply.com", "a-supply.com"], f"condition:{cid}")
 
 
 def test_cache_miss_when_the_supplier_list_changes(cid, mock_db, monkeypatch):
