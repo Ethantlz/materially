@@ -283,6 +283,24 @@ VALIDATORS: dict[str, dict] = {
             "error": _STR,
         },
     },
+    # One takeoff line drawn on a sheet. quantity is LF / SF / EA from the points and the sheet's scale.
+    "measurements": {
+        "bsonType": "object",
+        "required": ["job_id", "sheet", "condition_id", "kind", "points", "quantity", "unit"],
+        "properties": {
+            "job_id": _STR,
+            "sheet": _STR,  # sheets._id hex
+            "condition_id": _STR,
+            "kind": {"enum": ["linear", "area", "count"]},
+            "points": {"bsonType": "array", "minItems": 1, "items": POINT},  # PDF points, top-left origin
+            "quantity": {"bsonType": "number", "minimum": 0},
+            "unit": {"enum": ["lf", "sf", "ea"]},
+            "pt_per_ft": {"bsonType": ["number", "null"], "minimum": 0.01},  # the sheet scale it was measured at
+            "height_ft": {"bsonType": ["number", "null"], "minimum": 0, "maximum": 60},
+            "label": _STR_OR_NULL,
+            "created_at": {"bsonType": "date"},
+        },
+    },
     "review_queue": {
         "bsonType": "object",
         "required": ["source", "reason", "at"],
@@ -328,6 +346,7 @@ INDEXES: dict[str, list[tuple[list, dict]]] = {
     "ewos": [([("job_id", 1)], {})],
     "ewo_drafts": [([("ewo_id", 1)], {})],
     "orders": [([("job_id", 1)], {})],
+    "measurements": [([("job_id", 1), ("condition_id", 1)], {}), ([("sheet", 1)], {})],
     "usage": [([("job_id", 1)], {})],
     "product_data": [([("query_hash", 1)], {"unique": True})],
     "model_policy": [([("task", 1)], {"unique": True})],

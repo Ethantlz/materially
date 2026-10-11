@@ -20,6 +20,10 @@ Only the integrator edits `app/` and `contracts/`. If a lane needs a change here
   `app.db.insert_or_review(db, collection, doc, source)`: a rejected doc lands in `review_queue` with the reason.
 - `MONGODB_URI=mongomock://` gives an in-memory DB for tests (no validation, no change streams).
 
+- `measurements` is one takeoff line on a sheet: `points` in PDF points, `quantity` in `unit` (lf / sf / ea)
+  computed with the sheet's `scale.pt_per_ft`, which is stored on the doc. Total LF per condition is a
+  `$group` over measurements; that LF feeds `pipeline.orders.build`.
+
 ## Shared calls
 ```python
 from app.db import get_db, insert_or_review, to_review, now, oid, jsonable

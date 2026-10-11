@@ -150,6 +150,19 @@ SAMPLES: dict[str, dict] = {
         "at": AT,
         "ok": True,
     },
+    "measurements": {
+        "job_id": str(JOB_ID),
+        "sheet": str(SHEET_FP_ID),
+        "condition_id": str(CONDITION_ID),
+        "kind": "linear",
+        "points": [[400.0, 500.0], [1264.0, 500.0]],  # 864 pt at 1/8" = 1'-0" (9 pt/ft) -> 96 LF
+        "quantity": 96.0,
+        "unit": "lf",
+        "pt_per_ft": 9.0,
+        "height_ft": 10.0,
+        "label": None,
+        "created_at": AT,
+    },
     "review_queue": {
         "source": "parse_partition",
         "doc": {"type_tag": "B4", "studs": {"size_in": 3.625, "gauge": 19, "spacing_in": 16}},
