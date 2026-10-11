@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ job.name }} · materially{% endblock %}
+{% block body %}
+<section class="jobhead">
+  <h1 data-testid="job-title">{{ job.name }}</h1>
+  <div class="progress" data-testid="job-progress"><div class="bar" id="bar"></div></div>
+  <p class="muted" id="status" data-testid="job-status"></p>
+</section>
+<section class="grid" id="grid" data-testid="sheet-grid"></section>
+
+<dialog id="viewer" data-testid="sheet-viewer">
+  <div class="vhead"><strong id="vtitle"></strong><button id="vclose" data-testid="viewer-close">Close</button></div>
+  <img id="vimg" alt="">
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.JOB_ID = {{ job.id | tojson }};
+  window.SCALE_LABELS = {{ scale_labels | safe }};
+</script>
+<script src="/static/job.js"></script>
+{% endblock %}

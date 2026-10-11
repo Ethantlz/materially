@@ -1,0 +1,27 @@
+# secrets: never in the repo (Infisical injects env; ~/.c15 holds local-only files)
+.env
+.env.*
+*.env
+keys.env
+
+# drawing sets are not ours to publish
+fixtures/*.pdf
+fixtures/**/*.pdf
+*.pdf
+!docs/**/*.pdf
+
+# runtime data (uploads, rendered pages)
+data/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# os / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,13 @@
+# Models are added in the LiteLLM UI (STORE_MODEL_IN_DB) so the Luminal key is entered and rotated there,
+# never in this file. See infra/README.md for the exact fields.
+model_list: []
+
+litellm_settings:
+  drop_params: true
+  num_retries: 2
+  request_timeout: 120
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
