@@ -2,11 +2,12 @@
 import re
 import shutil
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 
 from app.db import get_db, jsonable, now, oid
 from app.settings import get_settings
+from extract import conditions
 from extract.analyze import parse_blocks
 from extract.ingest import ingest, read_sheet_page
 from extract.partitions import partition_blocks
@@ -86,7 +87,43 @@ def job_sheets(job_id: str):
 def job_conditions(job_id: str):
     db = get_db()
     _job_or_404(db, job_id)
-    return jsonable(list(db.conditions.find({"job_id": job_id}).sort([("type_tag", 1), ("_id", 1)])))
+    docs = list(db.conditions.find({"job_id": job_id}).sort([("type_tag", 1), ("_id", 1)]))
+    return jsonable(conditions.backfill(db, docs))
+
+
+@router.post("/jobs/{job_id}/conditions", status_code=201)
+def create_condition(job_id: str, body: dict = Body(...)):
+    """A condition typed in by hand: type_tag, studs, layers_each_side, sides, ... (name and color optional).
+    MongoDB's validator decides; a rejected one is in review_queue and the reason comes back as a 422."""
+    db = get_db()
+    _job_or_404(db, job_id)
+    doc, reason = _refusals(conditions.create, db, job_id, body)
+    if doc is None:
+        raise HTTPException(422, reason)
+    return jsonable(doc)
+
+
+@router.patch("/conditions/{condition_id}")
+def edit_condition(condition_id: str, body: dict = Body(...)):
+    return jsonable(_refusals(conditions.patch, get_db(), condition_id, body))
+
+
+@router.delete("/conditions/{condition_id}", status_code=204)
+def delete_condition(condition_id: str):
+    _refusals(conditions.delete, get_db(), condition_id)
+    return Response(status_code=204)
+
+
+@router.post("/conditions/{condition_id}/duplicate", status_code=201)
+def duplicate_condition(condition_id: str):
+    return jsonable(_refusals(conditions.duplicate, get_db(), condition_id))
+
+
+def _refusals(fn, *args):
+    try:
+        return fn(*args)
+    except conditions.Refused as e:
+        raise HTTPException(e.status, e.detail) from e
 
 
 @router.get("/jobs/{job_id}/rooms")

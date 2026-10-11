@@ -13,6 +13,7 @@ from bson import ObjectId
 from pymongo.database import Database
 
 from app import jev, router
+from extract import conditions
 from app.db import insert_or_review, oid, to_review
 from contracts.schemas import SHEET_KINDS
 from extract.partitions import Block, partition_blocks
@@ -100,7 +101,7 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
         "source": source,
         "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
     }
-    return insert_or_review(db, "conditions", doc, "extract.partition")
+    return conditions.insert(db, doc, "extract.partition")
 
 
 def parse_blocks(db: Database, job_id: str, sheet: dict, blocks: list[Block]) -> list[ObjectId | None]:
