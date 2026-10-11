@@ -88,12 +88,14 @@ def locate_title_blocks(pages: list[PageText], common: set[str]) -> None:
         right = [s for s in anchors if s.cx > 0.72 * p.width]
         bottom = [s for s in anchors if s.cy > 0.82 * p.height]
         corner = [s for s in right if s in bottom]
-        only_right, only_bottom = len(right) - len(corner), len(bottom) - len(corner)
+        only_right = [s for s in right if s not in corner]
+        only_bottom = [s for s in bottom if s not in corner]
         pad = 0.01 * max(p.width, p.height)
-        if only_right > only_bottom:
-            p.tb_corner = (max(0.0, min(s.x0 for s in right) - pad), 0.0)
-        elif only_bottom > only_right:
-            p.tb_corner = (0.0, max(0.0, min(s.top for s in bottom) - pad))
+        # The edge comes from the strip's (or band's) own text: corner text can be a view title's SCALE label.
+        if len(only_right) > len(only_bottom):
+            p.tb_corner = (max(0.0, min(s.x0 for s in only_right) - pad), 0.0)
+        elif len(only_bottom) > len(only_right):
+            p.tb_corner = (0.0, max(0.0, min(s.top for s in only_bottom) - pad))
         elif corner:
             p.tb_corner = (max(0.0, min(s.x0 for s in corner) - pad), max(0.0, min(s.top for s in corner) - pad))
 
@@ -219,6 +221,23 @@ def _clean_title(t: str | None) -> str | None:
     return t[:200] or None
 
 
+def _value_cell(lab: Seg, s: Seg) -> bool:
+    """`s` is the cell a bare SCALE label points at: on its baseline to its right within 6x the text size,
+    or directly under it."""
+    size = max(lab.size, s.size)
+    beside = abs(s.bottom - lab.bottom) < 0.35 * size and 0 <= s.x0 - lab.x1 <= 6 * size
+    under = 0 <= s.top - lab.bottom <= size and min(s.x1, lab.x1) - max(s.x0, lab.x0) > 0
+    return beside or under
+
+
+def _paired_scales(lab: Seg, segs: list[Seg]) -> list[Scale]:
+    """The scale in a SCALE label's value cell, read as if the label were in front of it, so a bare 1:100
+    counts here and nowhere else (times and slopes elsewhere stay out)."""
+    for s in sorted((s for s in segs if s is not lab and _value_cell(lab, s)), key=lab.gap_to)[:1]:
+        return find_scales(f"SCALE {s.text}")
+    return []
+
+
 def pick_scale(p: PageText) -> dict | None:
     """Title-block scale if it states one; otherwise the most common view-title scale on the sheet."""
     tb = [s for s in p.segs if p.in_title_block(s)]
@@ -232,11 +251,14 @@ def pick_scale(p: PageText) -> dict | None:
         for s in near[:2]:
             if says_as_noted(s.text):
                 break
-            got = find_scales(s.text)
+            got = find_scales(s.text) or (find_scales(f"SCALE {s.text}") if _value_cell(lab, s) else [])
             if got:
                 return got[0].as_doc("title_block", 0.85)
 
     views: list[Scale] = [sc for s in p.segs if not p.in_title_block(s) for sc in find_scales(s.text)]
+    for lab in (s for s in p.segs if not p.in_title_block(s) and SCALE_LABEL.search(normalize(s.text))):
+        if not find_scales(lab.text):  # a bare label: its value is in the next cell
+            views += [sc for sc in _paired_scales(lab, p.segs) if sc.label.startswith("1:")]
     numeric = [s for s in views if s.pt_per_ft]
     if numeric:
         counts = Counter(numeric)
