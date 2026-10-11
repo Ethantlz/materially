@@ -49,7 +49,8 @@ def test_unknown_job_is_404(client, what):
     assert client.get(f"/api/jobs/not-an-id/{what}").status_code == 404
 
 
-def test_reparse_replaces_the_sheets_conditions(client, job):
+def test_reparse_updates_the_sheets_conditions_in_place(client, job):
+    """D7: re-parsing upserts by (job_id, type_tag), so measurements never lose their condition."""
     job_id, sheets = job
     before = {c["id"] for c in client.get(f"/api/jobs/{job_id}/conditions").json()}
     r = client.post(f"/api/sheets/{sheets['A-501']['id']}/parse")
@@ -57,7 +58,7 @@ def test_reparse_replaces_the_sheets_conditions(client, job):
     assert r.json()["tags"] == ["A1", "A2", "B1"]
     after = client.get(f"/api/jobs/{job_id}/conditions").json()
     assert [c["type_tag"] for c in after] == ["A1", "A2", "B1"]
-    assert not before & {c["id"] for c in after}
+    assert before == {c["id"] for c in after}
 
 
 def test_parse_a_sheet_jev_missed(client, job, monkeypatch):

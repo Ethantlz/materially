@@ -1,0 +1,42 @@
+from bson import ObjectId
+from fastapi.testclient import TestClient
+
+from app import router as model_router
+from app.main import app
+from extract import analyze
+from extract.ingest import read_pages
+from extract.partitions import partition_blocks
+from scripts.make_drawing_set import build
+
+GOOD = ('{"type_tag": "%s", "studs": {"size_in": 3.625, "gauge": 20, "spacing_in": 16}, '
+        '"layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}], "sides": 2}')
+
+
+def _fake_model(monkeypatch):
+    monkeypatch.setattr(model_router, "call_model", lambda model, system, user: (GOOD % user.split()[0], 10, 10))
+
+
+def test_scan_without_partition_sheet_is_422(mock_db, monkeypatch):
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    job = str(mock_db.jobs.insert_one({"name": "x", "status": "ready"}).inserted_id)
+    mock_db.sheets.insert_one({"job_id": job, "page": 1, "kind": "floor_plan", "file": "a.pdf", "file_page": 1})
+    r = TestClient(app).post(f"/api/jobs/{job}/conditions/scan")
+    assert r.status_code == 422 and "partition" in r.json()["detail"].lower()
+    assert mock_db.conditions.count_documents({"job_id": job}) == 0
+
+
+def test_rescan_keeps_condition_ids(mock_db, monkeypatch, tmp_path):
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    _fake_model(monkeypatch)
+    pdf = tmp_path / "set.pdf"
+    build(pdf)
+    page = next(p for p in read_pages(pdf) if any(s.text.strip() == "A1" for s in p.segs))
+    job = str(ObjectId())
+    sheet = {"_id": ObjectId(), "job_id": job, "page": 6}
+    first = analyze.parse_blocks(mock_db, job, sheet, partition_blocks(page))
+    cid = str(mock_db.conditions.find_one({"type_tag": "A1"})["_id"])
+    mock_db.measurements.insert_one({"job_id": job, "condition_id": cid, "quantity": 100, "unit": "lf"})
+    second = analyze.parse_blocks(mock_db, job, sheet, partition_blocks(page))
+    assert sorted(map(str, first)) == sorted(map(str, second))
+    assert mock_db.conditions.count_documents({"job_id": job}) == 3
+    assert mock_db.conditions.find_one({"_id": ObjectId(cid)})["materials"][0]["role"] == "stud"

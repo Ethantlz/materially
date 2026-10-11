@@ -99,8 +99,9 @@ def job_rooms(job_id: str, sheet: str | None = None):
 
 @router.post("/sheets/{sheet_id}/parse")
 def parse_picked_sheet(sheet_id: str, background: BackgroundTasks):
-    """Checkpoint A fallback: parse partition types on a sheet a person picked. Replaces that sheet's
-    conditions; the new ones arrive at GET /api/jobs/{job_id}/conditions as each block is parsed."""
+    """Checkpoint A fallback: parse partition types on a sheet a person picked. Conditions already parsed from
+    this sheet are updated in place (same `_id`, so measurements keep them); new ones arrive at
+    GET /api/jobs/{job_id}/conditions as each block is parsed."""
     db = get_db()
     sheet = db.sheets.find_one({"_id": oid(sheet_id)})
     if not sheet:
@@ -113,6 +114,26 @@ def parse_picked_sheet(sheet_id: str, background: BackgroundTasks):
     if sheet["kind"] != "partition_types":
         routing = {"method": "manual", "previous_kind": sheet["kind"], "previous": sheet.get("routing")}
         db.sheets.update_one({"_id": sheet["_id"]}, {"$set": {"kind": "partition_types", "routing": routing}})
-    db.conditions.delete_many({"job_id": job_id, "source.sheet": sheet_id})
     background.add_task(parse_blocks, db, job_id, sheet, blocks)
     return {"sheet_id": sheet_id, "tags": [b.tag for b in blocks]}
+
+
+@router.post("/jobs/{job_id}/conditions/scan")
+def scan_partitions(job_id: str, background: BackgroundTasks):
+    """The conditions panel's "Scan partitions" button: parse every partition-type sheet of the project.
+    Conditions arrive at GET /api/jobs/{job_id}/conditions as each block is parsed; a re-scan updates them in place."""
+    db = get_db()
+    _job_or_404(db, job_id)
+    sheets = list(db.sheets.find({"job_id": job_id, "kind": "partition_types"}).sort("page", 1))
+    if not sheets:
+        raise HTTPException(422, "No partition-type sheet in this project. Open the partition sheet and use Parse this sheet.")
+    found = []
+    for sheet in sheets:
+        page = read_sheet_page(get_settings().data_dir / job_id / "source" / sheet["file"], sheet["file_page"])
+        blocks = partition_blocks(page)
+        if blocks:
+            background.add_task(parse_blocks, db, job_id, sheet, blocks)
+            found.append({"sheet_id": str(sheet["_id"]), "sheet_no": sheet.get("sheet_no"), "tags": [b.tag for b in blocks]})
+    if not found:
+        raise HTTPException(422, "The partition sheets have no type tags this reader recognises.")
+    return {"sheets": found, "tags": sum(len(f["tags"]) for f in found)}
