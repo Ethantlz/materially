@@ -119,6 +119,7 @@ window.costBadge = (job) => {
     createCondition: (job, body) =>                                                                       // extract
       route("createCondition", "POST", [`/api/jobs/${job}/conditions`, `/ui/standin/jobs/${job}/conditions`], body),
     scan: (job) => route("scan", "POST", [`/api/jobs/${job}/conditions/scan`]),                           // extract
+    addHeight: (cid, h) => route("addHeight", "POST", [`/api/conditions/${cid}/subconditions`], { height_ft: h }), // extract: a wall type at another height
     findProducts: (cid, key) => route("findProducts", "POST", [`/api/conditions/${cid}/materials/${encodeURIComponent(key)}/products`]), // procure
     products: (cid) => route("products", "GET", [`/api/conditions/${cid}/products`]),                     // procure
 

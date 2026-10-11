@@ -27,6 +27,9 @@ Only the integrator edits `app/` and `contracts/`. If a lane needs a change here
   conditions belong to the project; `measurements.alternate_id` and `orders.alternate_id` belong to one alternate.
   A missing `alternate_id` means Base bid.
 - `conditions.materials[]` lists what a wall type is built from (`MATERIAL` in schemas.py), built by `extract.materials.derive`.
+- `conditions.parent_id` (the parent condition's `_id` hex; missing or null on a top-level condition) marks a sub-condition: the
+  same wall type at another `height_ft`, one level deep. It copies its parent's assembly and has its own `_id`, name and colour, so
+  measurements, orders and alternates reference it like any condition. A re-scan of the parent updates the children's assembly.
 
 ## Shared calls
 ```python

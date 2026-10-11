@@ -90,16 +90,34 @@ def condition_view(c: dict, fallback_index: int = 0) -> dict:
         "id": c["id"], "job_id": c.get("job_id"), "type_tag": c.get("type_tag"),
         "name": c.get("name") or condition_name(c),
         "color": c.get("color") or PALETTE[fallback_index % len(PALETTE)],
-        "height_ft": c.get("height_ft"), "sides": c.get("sides"), "fire_rating": c.get("fire_rating"),
+        "height_ft": c.get("height_ft"), "parent_id": c.get("parent_id"),  # parent_id: set on a sub-condition (a height)
+        "sides": c.get("sides"), "fire_rating": c.get("fire_rating"),
         # What the type is built from, so the takeoff can expand a condition into its studs, track, board …
         "materials": c.get("materials") or [],
         "source": {"sheet": src.get("sheet"), "page": src.get("page"), "bbox": src.get("bbox")} if src else None,
     }
 
 
+def _heights_after_parents(conditions: list[dict]) -> list[dict]:
+    """Top-level conditions by type tag, each followed by its sub-conditions (heights) from low to high. A
+    sub-condition whose parent isn't in the list is listed on its own."""
+    tops = {c.get("id") for c in conditions if not c.get("parent_id")}
+    kids: dict[str, list[dict]] = {}
+    for c in conditions:
+        if c.get("parent_id") in tops:
+            kids.setdefault(c["parent_id"], []).append(c)
+    alone = [c for c in conditions if not (c.get("parent_id") in tops)]
+    out = []
+    for c in sorted(alone, key=lambda c: (c.get("type_tag") or "", c.get("id") or "")):
+        out.append(c)
+        out += sorted(kids.get(c.get("id"), []), key=lambda k: (k.get("height_ft") or 0, k.get("id") or ""))
+    return out
+
+
 def condition_views(conditions: list[dict]) -> list[dict]:
-    """Sorted by type tag. A condition without a stored colour takes the next palette colour nobody uses."""
-    ordered = sorted(conditions, key=lambda c: (c.get("type_tag") or "", c.get("id") or ""))
+    """Sorted by type tag, each wall type's heights right after it. A condition without a stored colour takes the
+    next palette colour nobody uses."""
+    ordered = _heights_after_parents(conditions)
     used = {c["color"] for c in ordered if c.get("color")}
     spare = [p for p in PALETTE if p not in used] or PALETTE
     out, i = [], 0

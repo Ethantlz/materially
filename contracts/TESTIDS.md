@@ -204,3 +204,6 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - ewo-table | /jobs/{job}/pm | field EWOs table on the PM page (the same partial the popup shows)
 - ewo-row | /jobs/{job}/pm | one field EWO on the PM page
 - ewos-empty | /jobs/{job}/pm | empty row of the PM page's field EWOs table
+- cond-add-height | /jobs/{job}/takeoff | "+ Height" under a wall type: opens the form that adds the same type at another wall height (js)
+- cond-height-input | /jobs/{job}/takeoff | wall height in feet for the new sub-condition; Enter or Add creates it (js)
+- cond-sub-row | /jobs/{job}/takeoff | a sub-condition (the wall type at another height), indented under its parent; click makes it active (js)

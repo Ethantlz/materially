@@ -138,3 +138,11 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--accent)
 /* materials under an expanded condition */
 .mats { list-style: none; margin: 4px 0 8px 28px; padding: 0; border-left: 1px solid var(--line); }
 .mat { padding: 6px 10px; }
+
+/* sub-conditions: a wall type at another height, indented under its parent */
+.crow.sub { margin-left: 16px; padding-top: 7px; padding-bottom: 7px; border-left: 1px solid var(--line); }
+.chgt { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crow button.caddh { height: 22px; padding: 0 6px; margin: 3px 0 0 -6px; font-size: 11.5px; color: var(--accent); }
+.hform { display: flex; align-items: center; gap: 6px; margin-top: 5px; cursor: default; }
+.hform input { width: 64px; height: 28px; padding: 0 7px; font-size: 12.5px; }
+.hform button { flex: none; height: 28px; }

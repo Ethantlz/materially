@@ -154,6 +154,13 @@ def duplicate_condition(condition_id: str):
     return jsonable(_refusals(conditions.duplicate, get_db(), condition_id))
 
 
+@router.post("/conditions/{condition_id}/subconditions", status_code=201)
+def add_subcondition(condition_id: str, body: dict = Body(...)):
+    """The same wall type at another height: {"height_ft": 1-60, "name": optional}. The new condition copies the
+    parent's assembly and has its own id, name ("A1 ... @ 12'"), colour and height. One level: 422 for a sub of a sub."""
+    return jsonable(_refusals(conditions.add_subcondition, get_db(), condition_id, body.get("height_ft"), body.get("name")))
+
+
 def _refusals(fn, *args):
     try:
         return fn(*args)
