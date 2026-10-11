@@ -1,25 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Conditions · {{ job.name }}{% endblock %}
 {% block body %}
-<div class="pagehead">
-  <h1>Conditions library</h1>
-  <p class="muted">Every partition type, read from the drawings into a document MongoDB validates. A bad parse is rejected into the <a href="/review?job_id={{ job.id }}">review queue</a>.</p>
+<div class="pagehead row">
+  <div>
+    <h1>Conditions library</h1>
+    <p class="muted">Every partition type, read from the drawings into a document MongoDB validates. A bad parse is rejected into the <a href="/review?job_id={{ job.id }}">review queue</a>.</p>
+  </div>
+  <a class="btn" href="/jobs/{{ job.id }}/takeoff">Open takeoff</a>
 </div>
+
+{% if rejected %}
+<div class="alert warn" data-testid="conditions-rejected">
+  <b>{{ rejected | length }} parse{{ "s" if rejected | length != 1 }} rejected into review.</b>
+  {% for r in rejected %}<div class="small" data-testid="condition-rejected"><span class="tagchip">{{ r.tag }}</span> {{ r.why }}</div>{% endfor %}
+  <div class="small" style="margin-top:6px"><a href="/review?job_id={{ job.id }}">Open the review queue →</a></div>
+</div>
+{% endif %}
+
 {% if conditions %}
 <table class="tbl" data-testid="conditions-table">
-  <thead><tr><th>Type</th><th>Studs</th><th>Board each side</th><th>Sides</th><th>Fire</th><th>STC</th><th>UL</th><th>Height</th><th>Source</th><th>Read by</th></tr></thead>
+  <thead><tr><th>Type</th><th>Name</th><th>Studs</th><th>Board each side</th><th>Sides</th><th>Fire</th><th>STC</th><th>UL</th><th>Height</th><th class="num">Measured</th><th>Source</th><th>Read by</th></tr></thead>
   <tbody>
-  {% for c in conditions %}
+  {% for c in conditions %}{% set v = views[c.id] %}{% set src = sheets.get((c.source or {}).get("sheet")) %}{% set m = measured.get(c.id) %}
   <tr data-testid="condition-row">
-    <td><a class="tagchip" href="/conditions/{{ c.id }}" data-testid="condition-link">{{ c.type_tag }}</a></td>
-    <td>{{ c.studs.size_in | inches }} {{ c.studs.gauge }} ga @ {{ c.studs.spacing_in | inches }} o.c.</td>
+    <td style="white-space:nowrap"><span class="swatch" style="background:{{ v.color }}" data-testid="condition-swatch"></span><a class="tagchip" href="/conditions/{{ c.id }}" data-testid="condition-link">{{ c.type_tag }}</a></td>
+    <td class="muted" data-testid="condition-name">{{ v.name }}</td>
+    <td>{{ c.studs | studs }}</td>
     <td>{% for l in c.layers_each_side %}{{ l.thickness_in | inches }} {{ l.board_type | board }}{% if not loop.last %} + {% endif %}{% endfor %}</td>
     <td>{{ c.sides or "—" }}</td>
     <td>{{ ("%g hr" % c.fire_rating) if c.fire_rating else "—" }}</td>
     <td>{{ c.stc or "—" }}</td>
     <td>{{ c.ul_assembly or "—" }}</td>
     <td>{{ ("%g ft" % c.height_ft) if c.height_ft else "—" }}</td>
-    <td class="muted">{% set s = sheets.get((c.source or {}).get("sheet")) %}{{ s.sheet_no if s else "—" }}</td>
+    <td class="num">{% if m and m.lf %}<a href="/jobs/{{ job.id }}/takeoff?cond={{ c.id }}">{{ "%.1f" % m.lf }} LF</a>{% else %}<a class="muted" href="/jobs/{{ job.id }}/takeoff?cond={{ c.id }}">Measure</a>{% endif %}</td>
+    <td>{% if src and c.source and c.source.bbox %}<a href="/jobs/{{ job.id }}/takeoff?sheet={{ src.id }}&focus={{ c.id }}" data-testid="condition-source-link" title="Show the box on the partition sheet">{{ src.sheet_no or "sheet" }} ↗</a>{% else %}<span class="muted">—</span>{% endif %}</td>
     <td>{% set r = c.routing or {} %}<span class="model">{{ (r.model or "—").split("/")[-1] }}</span>{% if r.escalated %} <span class="badge esc" data-testid="condition-escalated">retried on Sonnet</span>{% endif %}</td>
   </tr>
   {% endfor %}

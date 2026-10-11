@@ -1,4 +1,6 @@
 <article class="draft {{ 'esc' if d.escalated }}" data-id="{{ d.id }}" data-testid="pm-draft">
+  {% if d.crop %}<div class="pinthumb" style="{{ d.crop }}"><span>{{ d.sheet.sheet_no or "sheet" }} · pin</span></div>{% endif %}
+  <div class="body">
   <div class="row">
     <span><span class="badge task" data-testid="pm-draft-task">{{ d.task | task }}</span>
       {% if d.escalated %}<span class="badge esc" data-testid="pm-draft-escalated">escalated to Sonnet</span>{% endif %}</span>
@@ -13,5 +15,6 @@
   {% endif %}
   {% if d.explanation %}<p class="small">{{ d.explanation }}</p>{% endif %}
   {% set r = d.routing or {} %}
-  <p class="muted small">Routed by {{ (r.model or "Jev").split("/")[-1] }}{% if r.probabilities and r.choice %} ({{ "%d" % (100 * r.probabilities.get(r.choice, 0)) }}%){% endif %} · drafted by {{ (d.model or "—").split("/")[-1] }}</p>
+  <p class="muted small" style="margin:0">Routed by {{ (r.model or "Jev").split("/")[-1] }}{% if r.probabilities and r.choice %} ({{ "%d" % (100 * r.probabilities.get(r.choice, 0)) }}%){% endif %} · drafted by {{ (d.model or "—").split("/")[-1] }}</p>
+  </div>
 </article>

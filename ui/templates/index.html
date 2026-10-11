@@ -1,49 +1,56 @@
 {% extends "base.html" %}
+{% block title %}Projects · materially{% endblock %}
 {% block body %}
-<section class="card upload">
-  <h1>New project</h1>
-  <form id="upload-form" data-testid="upload-form">
-    <label>Project name
-      <input name="name" required placeholder="e.g. Penn State Lab Fit-Out" data-testid="job-name">
-    </label>
-    <label class="drop" id="drop" data-testid="job-drop">
-      <input type="file" name="files" accept="application/pdf,.pdf" multiple required data-testid="job-files">
-      <span id="drop-text">Drop drawing PDFs here, or click to choose</span>
-    </label>
-    <button type="submit" data-testid="job-upload">Upload drawings</button>
-    <p class="err" id="upload-err" data-testid="upload-error"></p>
-  </form>
-</section>
+<div class="home">
+  <section class="card upload">
+    <h1>New project</h1>
+    <p class="muted">Upload the drawing set. Sheet names and scales show up within seconds.</p>
+    <form id="upload-form" data-testid="upload-form" style="margin-top:14px">
+      <label>Project name
+        <input name="name" required placeholder="e.g. Penn State Lab Fit-Out" data-testid="job-name">
+      </label>
+      <label class="drop" id="drop" data-testid="job-drop">
+        <input type="file" name="files" accept="application/pdf,.pdf" multiple required data-testid="job-files">
+        <span id="drop-text">Drop drawing PDFs here, or click to choose</span>
+      </label>
+      <button type="submit" data-testid="job-upload">Upload drawings</button>
+      <p class="err" id="upload-err" data-testid="upload-error"></p>
+    </form>
+  </section>
 
-<section class="card">
-  <h2>Projects</h2>
-  {% if jobs %}
-  <ul class="jobs" data-testid="job-list">
-    {% for j in jobs %}
-    <li><a href="/jobs/{{ j.id }}">{{ j.name }}</a>
-      <span class="muted">{{ j.pages_total or 0 }} sheets · {{ j.status }}</span></li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="muted">No projects yet.</p>
-  {% endif %}
-</section>
+  <section class="card">
+    <h2>Projects</h2>
+    {% if jobs %}
+    <ul class="jobs" data-testid="job-list">
+      {% for j in jobs %}
+      <li><a href="/jobs/{{ j.id }}">{{ j.name }}</a>
+        <span class="muted">{{ j.pages_total or 0 }} sheets · {{ j.status }}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No projects yet.</p>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
 const form = document.getElementById("upload-form");
 const input = form.querySelector("input[type=file]");
+const drop = document.getElementById("drop");
 const dropText = document.getElementById("drop-text");
-input.addEventListener("change", () => {
-  dropText.textContent = [...input.files].map(f => f.name).join(", ") || "Drop drawing PDFs here, or click to choose";
-});
+const idle = "Drop drawing PDFs here, or click to choose";
+input.addEventListener("change", () => { dropText.textContent = [...input.files].map(f => f.name).join(", ") || idle; });
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => { if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; input.dispatchEvent(new Event("change")); } });
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = form.querySelector("button");
   btn.disabled = true; btn.textContent = "Uploading…";
-  const res = await fetch("/api/jobs", { method: "POST", body: new FormData(form) });
-  if (res.ok) { location.href = "/jobs/" + (await res.json()).job_id; return; }
-  document.getElementById("upload-err").textContent = (await res.json()).detail || "Upload failed";
+  const r = await Jobs.create(new FormData(form));
+  if (r.ok) { location.href = "/jobs/" + r.data.job_id; return; }
+  document.getElementById("upload-err").textContent = errText(r, "Upload failed");
   btn.disabled = false; btn.textContent = "Upload drawings";
 });
 </script>

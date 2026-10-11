@@ -5,7 +5,9 @@
 1. Builds the synthetic 7-sheet ARCH D set and runs the real extract.ingest (names, scales, page images).
 2. With keys: Jev sorts each sheet (asked twice, shuffled) and DeepSeek reads A1/A2/B1 on A-501 through
    run_task, so routing badges and the cost badge are real. Without keys it uses the drawing's values.
-3. Rooms 101/102/103 on the plan sheets (label centres from the generator), one EWO routed and drafted live,
+3. Conditions carry a name and colour (what lane 1 stores), and A1 gets one measurement on A-101 (100 LF, the same
+   100 LF the seeded order uses) so the quantities table has a row. `--no-measure` skips it.
+   Rooms 101/102/103 on the plan sheets (label centres from the generator), one EWO routed and drafted live,
    a sample product sheet with a deliberate mismatch, an A1 order with a padded board line, and a bad
    condition written through insert_or_review so MongoDB's rejection shows in the review queue.
 Docs that stand in for another lane's output carry `sample: true`.
@@ -20,6 +22,7 @@ from contracts.samples import BAD_CONDITION
 from contracts.schemas import SHEET_KINDS
 from extract.ingest import ingest
 from scripts.make_drawing_set import H, build
+from ui.common import PALETTE, condition_name
 
 PARTITION_TEXT = '{tag}\n3 5/8" 20 GA STUDS @ 16" O.C.\n(1) LAYER 5/8" TYPE X GYP. BD. EACH SIDE'
 DRAWING_CONDITION = {
@@ -53,7 +56,7 @@ def _rooms_for(sheet: dict) -> list[dict]:
     return out
 
 
-def seed(db, live: bool) -> str:
+def seed(db, live: bool, measure: bool = True) -> str:
     data_dir = get_settings().data_dir
     job_id = str(db.jobs.insert_one({"name": "Materially Test Building (sample)", "created_at": now(),
                                      "status": "uploading", "pages_total": 0, "pages_named": 0, "pages_rendered": 0}).inserted_id)
@@ -89,7 +92,8 @@ def seed(db, live: bool) -> str:
                 to_review(db, "parse_partition", {"job_id": job_id, "type_tag": tag}, e.reason)
                 continue
         source = {"sheet": pt["id"], "page": pt["page"], "bbox": [150.0 + i * 500, 270.0, 470.0 + i * 500, 385.0]} if pt else {}
-        insert_or_review(db, "conditions", {**cond, "job_id": job_id, "source": source, "routing": routing}, "extract.partition")
+        doc = {**cond, "job_id": job_id, "source": source, "routing": routing, "color": PALETTE[i % len(PALETTE)]}
+        insert_or_review(db, "conditions", {**doc, "name": condition_name(doc)}, "extract.partition")
     insert_or_review(db, "conditions", {**BAD_CONDITION, "job_id": job_id}, "extract.partition")  # rejected -> review_queue
     print(f"  {db.conditions.count_documents({'job_id': job_id})} conditions, bad parse sent to review")
 
@@ -127,6 +131,13 @@ def seed(db, live: bool) -> str:
                                         "sent_at": None, "sample": True}, "ui.demo_seed")
 
     plan = sheets.get("A-101")
+    if plan and a1 and measure:  # room 101 on A-101: 240 + 300 + 240 + 120 pt at 9 pt/ft = 100 LF
+        pts = [[160.0, 468.0], [400.0, 468.0], [400.0, 768.0], [160.0, 768.0], [160.0, 648.0]]
+        ppf = plan["scale"]["pt_per_ft"]
+        lf = sum(((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 for a, b in zip(pts, pts[1:])) / ppf
+        insert_or_review(db, "measurements", {"job_id": job_id, "sheet": plan["id"], "condition_id": str(a1["_id"]), "kind": "linear",
+                                              "points": pts, "quantity": round(lf, 3), "unit": "lf", "pt_per_ft": ppf, "height_ft": 10.0,
+                                              "label": None, "created_at": now()}, "ui.demo_seed")
     if plan:
         room = db.rooms.find_one({"sheet": plan["id"], "number": "101"})
         ewo = {"job_id": job_id, "sheet": plan["id"], "pin": [300.0, 640.0], "room_id": str(room["_id"]) if room else None,
@@ -152,5 +163,5 @@ def seed(db, live: bool) -> str:
 
 if __name__ == "__main__":
     live = _live() and "--offline" not in sys.argv
-    job = seed(get_db(), live)
+    job = seed(get_db(), live, measure="--no-measure" not in sys.argv)
     print(f"done ({'live models' if live else 'offline values'}): /jobs/{job}")
