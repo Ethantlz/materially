@@ -51,7 +51,10 @@ window.errText = (r, fallback) => {
 
 window.toast = (msg, bad = false) => {
   let el = document.getElementById("toast");
-  if (!el) { el = document.createElement("div"); el.id = "toast"; el.dataset.testid = "toast"; document.body.appendChild(el); }
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.dataset.testid = "toast"; }
+  // an open <dialog> sits in the top layer and hides everything under it: the toast goes inside it while one is open
+  const host = document.querySelector("dialog[open]") || document.body;
+  if (el.parentNode !== host) host.appendChild(el);
   el.textContent = msg; el.className = bad ? "show bad" : "show";
   clearTimeout(el._t); el._t = setTimeout(() => (el.className = ""), 4200);
 };

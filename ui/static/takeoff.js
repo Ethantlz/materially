@@ -101,7 +101,7 @@ function showEmpty(title, sub = "") {
 function loadImage() {
   const sh = sheet();
   S.loaded = false;
-  if (!sh) return showEmpty("No sheets yet", "Upload a drawing set on the Sheets tab to start a takeoff.");
+  if (!sh) return showEmpty("No sheets yet", "Upload a drawing set on the home page; its sheets then appear in the sheet dropdown above.");
   if (!sh.image_path) return showEmpty("This sheet is still rendering…", "It appears here as soon as its image is ready.");
   $("#vp-empty").hidden = true; stage.style.display = "";
   const done = () => {
@@ -548,11 +548,12 @@ function showScaleMenu() {
   m.innerHTML = B.scaleLabels.filter((l) => l !== "NTS").map((l) => `<button type="button" data-label="${esc(l)}" class="${l === cur ? "cur" : ""}">${esc(l)}</button>`).join("") +
     `<hr><button type="button" data-cal style="font-family:system-ui;color:var(--accent)">Calibrate on a known dimension… (K)</button>`;
   // Anchor it under the chip (which sits beside Undo, on the left), not at the canvas' top-right corner. The menu is
-  // absolute inside #viewport, so this is relative to the offset parent and clamped so the overflow:hidden can't clip.
-  const chip = $("#scale-chip").getBoundingClientRect(), pa = (m.offsetParent || document.body).getBoundingClientRect();
-  m.style.left = `${Math.max(0, Math.min(chip.left - pa.left, pa.width - 210))}px`;
-  m.style.top = `${Math.max(8, chip.bottom - pa.top + 6)}px`;
+  // absolute inside #viewport, so measure against the viewport (a hidden element has no layout parent to measure) and clamp by the
+  // menu's own width, known once it is shown, so the overflow:hidden can't clip it.
+  const chip = $("#scale-chip").getBoundingClientRect(), pa = vp.getBoundingClientRect();
   m.style.right = "auto"; m.hidden = false;
+  m.style.left = `${Math.max(0, Math.min(chip.left - pa.left, pa.width - m.offsetWidth - 8))}px`;
+  m.style.top = `${Math.max(8, chip.bottom - pa.top + 6)}px`;
 }
 async function chooseScale(label) {
   hideMenus();
@@ -655,8 +656,9 @@ $("#scale-menu").addEventListener("click", (e) => {
   if (b.dataset.cal !== undefined) { hideMenus(); setTool("calibrate"); } else chooseScale(b.dataset.label);
 });
 document.addEventListener("click", (e) => { if (!e.target.closest("#scale-menu, #help, #scale-chip, #btn-help")) hideMenus(); });
-$("#sheet-select").addEventListener("change", (e) => openSheet(e.target.value));
+$("#sheet-select").addEventListener("change", (e) => { e.target.blur(); openSheet(e.target.value); });  // blur: a focused <select> swallows the shortcuts
 $("#alt-select").addEventListener("change", async (e) => {
+  e.target.blur();  // a focused <select> swallows the shortcuts and type-aheads into itself
   // Switching the alternate changes which measurements belong on this sheet: save the shape being drawn under the
   // alternate it was drawn in, drop the selection, then re-fetch the sheet's measurements for the new alternate
   // and redraw the canvas (refresh() does both; opening a sheet reloads its measurements the same way).
@@ -680,9 +682,15 @@ $("#clist").addEventListener("click", async (e) => {
   const f = e.target.closest("[data-find]");
   if (f) {  // one material -> a product_data doc through the procure lane (409 until the Firecrawl key exists)
     f.disabled = true; f.textContent = "Searching…";
-    const row = f.closest("[data-cid]"), cid = row.dataset.cid;
+    const row = f.closest("[data-cid]"), cid = row.dataset.cid, mat = f.closest("[data-testid=material-row]");
+    mat?.querySelector("[data-testid=material-error]")?.remove();  // a new attempt clears the old message
     const r = await Takeoff.findProducts(cid, f.dataset.find);
-    if (!r.ok) { toast(r.data?.detail || "Product search failed", true); f.disabled = false; f.textContent = "Find product"; return; }
+    if (!r.ok) {
+      const why = errText(r, "Product search failed");
+      toast(why, true); f.disabled = false; f.textContent = "Find product";
+      mat?.insertAdjacentHTML("beforeend", `<span class="small muted" data-testid="material-error">${esc(why)}</span>`);
+      return;
+    }
     S.products[cid] = { ...(S.products[cid] || {}), [r.data.id]: r.data };
     await reloadData(true);
     return;

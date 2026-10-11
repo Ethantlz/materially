@@ -28,13 +28,16 @@
   dlg.addEventListener("close", () => { latest++; document.dispatchEvent(new CustomEvent("modal:closed")); });
   window.Modal = { open, close };
 
-  // The alternate the takeoff is showing (Task 9 sets S.altId); S is a top-level const in takeoff.js.
-  const alt = () => (typeof S !== "undefined" && S.altId) || "";
+  // The alternate the takeoff is showing, read from its dropdown (takeoff.js's S isn't visible from this script).
+  const alt = () => document.getElementById("alt-select")?.value || "";
   const bind = (id, title, url) => {
     const b = document.getElementById(id);
     if (b) b.onclick = () => Modal.open(title, url());
   };
   bind("open-orders", "Material orders", () => `/ui/jobs/${JOB_ID}/panel/orders?alt=${alt()}`);
+  // The drawer's "Orders →" link opens the same popup; its href is the full-page fallback where this script isn't loaded.
+  const drawerOrders = document.getElementById("drawer-orders");
+  if (drawerOrders) drawerOrders.onclick = (e) => { e.preventDefault(); document.getElementById("open-orders")?.click(); };
   bind("open-ewos", "EWOs", () => `/ui/jobs/${JOB_ID}/panel/ewos`);
   bind("open-tracking", "Tracking", () => `/ui/jobs/${JOB_ID}/panel/tracking?alt=${alt()}`);
   bind("open-review", "Review queue", () => `/ui/jobs/${JOB_ID}/panel/review`);

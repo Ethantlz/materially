@@ -13,6 +13,7 @@ from extract.analyze import parse_blocks
 from extract.ingest import ingest, read_sheet_page
 from extract.partitions import partition_blocks
 from extract.scale import parse_label
+from extract.sheetinfo import guess_kind
 
 router = APIRouter(prefix="/api", tags=["extract"])
 
@@ -196,9 +197,12 @@ def scan_partitions(job_id: str, background: BackgroundTasks):
     Conditions arrive at GET /api/jobs/{job_id}/conditions as each block is parsed; a re-scan updates them in place."""
     db = get_db()
     _job_or_404(db, job_id)
-    sheets = list(db.sheets.find({"job_id": job_id, "kind": "partition_types"}).sort("page", 1))
+    # the same rule as the upload-time parse (extract.analyze): a sheet Jev sorted as partition_types, or one whose title
+    # names partition types / an assembly schedule (a cover page carrying the schedule is "other" to Jev)
+    sheets = [s for s in db.sheets.find({"job_id": job_id}).sort("page", 1)
+              if s.get("kind") == "partition_types" or guess_kind(s.get("title")) == "partition_types"]
     if not sheets:
-        raise HTTPException(422, "No partition-type sheet in this project. Open the partition sheet and use Parse this sheet.")
+        raise HTTPException(422, "No partition-type sheet in this project. Add conditions by hand with + New condition, or check the sheet names.")
     found = []
     for sheet in sheets:
         page = read_sheet_page(get_settings().data_dir / job_id / "source" / sheet["file"], sheet["file_page"])
@@ -207,5 +211,5 @@ def scan_partitions(job_id: str, background: BackgroundTasks):
             background.add_task(parse_blocks, db, job_id, sheet, blocks)
             found.append({"sheet_id": str(sheet["_id"]), "sheet_no": sheet.get("sheet_no"), "tags": [b.tag for b in blocks]})
     if not found:
-        raise HTTPException(422, "The partition sheets have no type tags this reader recognises.")
+        raise HTTPException(422, "The partition sheets have no type tags this reader recognises. Add conditions by hand with + New condition.")
     return {"sheets": found, "tags": sum(len(f["tags"]) for f in found)}
