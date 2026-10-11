@@ -165,6 +165,13 @@ def test_takeoff_js_renders_materials_and_scan():
     assert "Takeoff.scan(" in js
 
 
+def test_canvas_and_undo_follow_the_alternate():
+    js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
+    assert "Takeoff.undo(S.sheetId, S.altId)" in js
+    calls = re.findall(r"Takeoff\.measurements\(([^)]*)\)", js)
+    assert calls and all("S.altId" in c for c in calls)
+
+
 def test_condition_views_pass_materials_through():
     from ui.common import condition_views
 

@@ -124,7 +124,7 @@ async function openSheet(id) {
   S.sheetId = id; S.sel = null; S.cal = null; S.meas = []; S.cur = null;
   hideCalPop(); hideMenus(); syncUrl();
   renderSheetSelect(); renderToolbar(); loadImage();
-  const m = await Takeoff.measurements(id);
+  const m = await Takeoff.measurements(id, S.altId);
   if (id !== S.sheetId) return;
   S.meas = m.ok ? m.items : []; S.measOk = m.ok;
   renderMeas(); renderToolbar();
@@ -138,9 +138,11 @@ function syncUrl() {
 }
 
 // ---------------------------------------------------------------- data
+// The selected alternate scopes both the drawer totals and the shapes on the canvas (D3), so every refresh
+// re-reads the current sheet's measurements for S.altId and redraws them.
 async function refresh() {
   const sid = S.sheetId;
-  const [m, q] = await Promise.all([sid ? Takeoff.measurements(sid) : { ok: true, items: [] }, Takeoff.quantities(S.job.id, S.altId)]);
+  const [m, q] = await Promise.all([sid ? Takeoff.measurements(sid, S.altId) : { ok: true, items: [] }, Takeoff.quantities(S.job.id, S.altId)]);
   if (sid === S.sheetId) { S.meas = m.ok ? m.items : []; S.measOk = m.ok; }
   S.qty = new Map(q.rows.map((x) => [x.cid, x])); S.qtyOk = q.ok;
   renderAll();
@@ -468,7 +470,7 @@ async function undo() {
     if (!S.draft.points.length) S.draft = null;
     return renderDraft();
   }
-  const r = await Takeoff.undo(S.sheetId);
+  const r = await Takeoff.undo(S.sheetId, S.altId);
   if (!r.ok) return toast(errText(r, "Nothing to undo."), true);
   S.sel = null; await refresh();
 }
@@ -642,7 +644,14 @@ $("#scale-menu").addEventListener("click", (e) => {
 });
 document.addEventListener("click", (e) => { if (!e.target.closest("#scale-menu, #help, #scale-chip, #btn-help")) hideMenus(); });
 $("#sheet-select").addEventListener("change", (e) => openSheet(e.target.value));
-$("#alt-select").addEventListener("change", async (e) => { S.altId = e.target.value; syncUrl(); await refresh(); });
+$("#alt-select").addEventListener("change", async (e) => {
+  // Switching the alternate changes which measurements belong on this sheet: save the shape being drawn under the
+  // alternate it was drawn in, drop the selection, then re-fetch the sheet's measurements for the new alternate
+  // and redraw the canvas (refresh() does both; opening a sheet reloads its measurements the same way).
+  if (S.draft) await finishDraft();
+  S.altId = e.target.value; S.sel = null; syncUrl(); renderMeas();
+  await refresh();
+});
 
 $("#clist").addEventListener("click", async (e) => {
   const ex = e.target.closest("[data-expand]");
