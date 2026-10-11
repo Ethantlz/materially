@@ -98,6 +98,12 @@ def locate_title_blocks(pages: list[PageText], common: set[str]) -> None:
             p.tb_corner = (max(0.0, min(s.x0 for s in corner) - pad), max(0.0, min(s.top for s in corner) - pad))
 
 
+def title_block_text(p: PageText, common: set[str], limit: int = 1500) -> str:
+    """This sheet's own title-block text (repeating boilerplate dropped) in reading order, for Jev."""
+    own = [s for s in p.segs if p.in_title_block(s) and normalize(s.text).strip() not in common]
+    return " | ".join(s.text for s in sorted(own, key=lambda s: (s.top, s.x0)))[:limit]
+
+
 def _sheet_no_in(text: str) -> str | None:
     t = normalize(text).strip()
     if SHEET_NO.fullmatch(t):
