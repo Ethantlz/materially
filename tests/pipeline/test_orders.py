@@ -52,6 +52,21 @@ def test_unknown_items_stay_unpriced_and_are_listed(db, job, client):
     assert client.get(f"/api/orders/{body['order_id']}").json()["unpriced"] == body["unpriced"]
 
 
+def test_a_wall_with_no_gauge_prices_fully_and_says_what_was_assumed(db, job):
+    sa4 = add_condition(db, job, type_tag="SA4", studs={"size_in": 3.625, "gauge": None, "spacing_in": 16}, insulation=None)
+    sh4 = add_condition(db, job, type_tag="SH4", studs={"size_in": 4, "gauge": None, "spacing_in": None}, sides=1, insulation=None)
+
+    wall, shaft = (by_id(db.orders, orders.build(job, c, 100, 10)) for c in (sa4, sh4))
+
+    for order in (wall, shaft):
+        assert orders.unpriced(order) == [] and order["total"] > 0 and order["guard"]["over"] is False
+        assert all(isinstance(l["unit_cost"], (int, float)) for l in order["lines"])
+    studs = {o["lines"][0]["item"]: o["lines"][0] for o in (wall, shaft)}
+    assert studs["stud_3.625_20ga_10ft"]["unit_cost"] == 10.15 and studs["stud_3.625_20ga_10ft"]["assumed"] == ["gauge 20 (not on drawings)"]
+    assert studs["stud_4_20ga_10ft"]["computed_qty"] == 51 and len(studs["stud_4_20ga_10ft"]["assumed"]) == 2  # 24" shaft spacing
+    assert [l["assumed"] for l in wall["lines"] if "assumed" in l] == [["gauge 20 (not on drawings)"]] * 2  # studs and track only
+
+
 def test_build_takes_its_lines_from_orders_math(db, job, monkeypatch):
     from orders import math as order_math
 

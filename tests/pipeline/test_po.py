@@ -82,3 +82,15 @@ def test_po_routes(db, job, order_id, client):
     assert client.patch(f"/api/orders/{order_id}/lines/0", json={"qty": 1}).status_code == 409  # lines freeze once sent
     assert client.get(f"/api/orders/{new_id()}/po").status_code == 404
     assert client.post(f"/api/orders/{new_id()}/send").status_code == 404
+
+
+def test_the_po_prints_assumed_next_to_lines_sized_on_an_assumption(db, job):
+    plain = po.render(orders.build(job, add_condition(db, job), 100, 10))
+    assert "(assumed)" not in plain
+
+    sa4 = add_condition(db, job, type_tag="SA4", studs={"size_in": 3.625, "gauge": None, "spacing_in": 16})
+    html = po.render(orders.build(job, sa4, 100, 10))
+
+    assert html.count('class="assumed"') == 2  # studs and track
+    assert "stud_3.625_20ga_10ft <span" in html and "(assumed)" in html
+    assert "gauge 20 (not on drawings)" in html and "unpriced" not in html
