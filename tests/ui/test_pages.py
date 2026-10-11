@@ -214,6 +214,16 @@ def test_canvas_and_undo_follow_the_alternate():
     assert calls and all("S.altId" in c for c in calls)
 
 
+def test_a_draft_is_saved_under_the_alternate_it_was_drawn_in():
+    js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
+    assert "alternate_id: d.alt" in js  # the draft carries its own alternate, not whatever is selected now
+    assert "alt: S.altId" in js         # tagged where the draft is created
+    handler = js[js.index('$("#alt-select").addEventListener'):]
+    handler = handler[: handler.index("\n});")]  # switching alternates drops a draft that couldn't be saved
+    assert "cancelDraft()" in handler
+    assert "S.meas = []" in handler
+
+
 def test_condition_views_pass_materials_through():
     from ui.common import condition_views
 
