@@ -122,14 +122,15 @@ window.costBadge = (job) => {
     findProducts: (cid, key) => route("findProducts", "POST", [`/api/conditions/${cid}/materials/${encodeURIComponent(key)}/products`]), // procure
     products: (cid) => route("products", "GET", [`/api/conditions/${cid}/products`]),                     // procure
 
-    async measurements(sheet) {                                                                           // pipeline
-      const r = await route("measurements", "GET", [`/api/sheets/${sheet}/measurements`, `/ui/standin/sheets/${sheet}/measurements`]);
+    async measurements(sheet, alt) {                                                                      // pipeline
+      const q = alt ? `?alternate_id=${encodeURIComponent(alt)}` : "";
+      const r = await route("measurements", "GET", [`/api/sheets/${sheet}/measurements${q}`, `/ui/standin/sheets/${sheet}/measurements`]);
       return { ...r, items: r.ok ? list(r.data, "measurements", "items").map((m) => ({ ...m, id: idOf(m) })) : [] };
     },
     addMeasurement: (m) => route("addMeasurement", "POST", ["/api/measurements", "/ui/standin/measurements"], m),
     deleteMeasurement: (id) => route("deleteMeasurement", "DELETE", [`/api/measurements/${id}`, `/ui/standin/measurements/${id}`]),
-    undo: (sheet) =>
-      route("undo", "POST", [`/api/sheets/${sheet}/measurements/undo`, `/ui/standin/sheets/${sheet}/measurements/undo`]),
+    undo: (sheet, alt) =>
+      route("undo", "POST", [`/api/sheets/${sheet}/measurements/undo${alt ? `?alternate_id=${encodeURIComponent(alt)}` : ""}`, `/ui/standin/sheets/${sheet}/measurements/undo`]),
 
     // One entry per condition: {cid, lf, sf, ea, n, ...}. The rows may come one per (condition, unit) or already merged.
     async quantities(job, alt) {                                                                          // pipeline

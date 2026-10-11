@@ -86,18 +86,34 @@ def add_measurement(job_id: str, sheet_id: str, condition_id: str, kind: str, po
     return str(new_id)
 
 
-def list_measurements(sheet_id: str) -> list[dict]:
-    """The sheet's measurements, oldest first (drawing order)."""
-    return list(get_db().measurements.find({"sheet": sheet_id}).sort("_id", 1))
+def _sheet_job(db, sheet_id: str) -> str | None:
+    """The job a sheet belongs to, for scoping it by alternate. None for an unknown sheet."""
+    sheet = db.sheets.find_one({"_id": oid(sheet_id)}, {"job_id": 1}) if oid(sheet_id) else None
+    return (sheet or {}).get("job_id")
+
+
+def list_measurements(sheet_id: str, alternate_id: str | None = None) -> list[dict]:
+    """The sheet's measurements in one alternate, oldest first (drawing order).
+    None or the base bid's id = the base bid; an unknown sheet has none."""
+    db = get_db()
+    job_id = _sheet_job(db, sheet_id)
+    if job_id is None:
+        return []
+    return list(db.measurements.find({"sheet": sheet_id, **scope(job_id, alternate_id)}).sort("_id", 1))
 
 
 def delete_measurement(measurement_id: str) -> bool:
     return bool(oid(measurement_id)) and get_db().measurements.delete_one({"_id": oid(measurement_id)}).deleted_count == 1
 
 
-def undo_last(sheet_id: str) -> dict | None:
-    """Delete the most recent measurement on a sheet; return it, or None when the sheet has none."""
-    return get_db().measurements.find_one_and_delete({"sheet": sheet_id}, sort=[("_id", -1)])
+def undo_last(sheet_id: str, alternate_id: str | None = None) -> dict | None:
+    """Delete the most recent measurement on a sheet in one alternate; return it, or None when it has none.
+    None or the base bid's id = the base bid, so undoing never reaches into another alternate's newest."""
+    db = get_db()
+    job_id = _sheet_job(db, sheet_id)
+    if job_id is None:
+        return None
+    return db.measurements.find_one_and_delete({"sheet": sheet_id, **scope(job_id, alternate_id)}, sort=[("_id", -1)])
 
 
 def _natural(tag: str | None) -> list:

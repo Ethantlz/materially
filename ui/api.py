@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from app.db import get_db, jsonable, oid
 from contracts.schemas import GAUGES
 from extract.scale import COMMON_LABELS
-from projects.alternates import list_alternates, project_rows
+from projects.alternates import list_alternates, project_rows, scope
 from ui import standins
 from ui.common import (  # noqa: F401  (inches and reason_summary are re-exported for the tests)
     BOARD_LABELS, PALETTE, condition_views, discipline, inches, next_color, reason_summary, stud_text,
@@ -93,9 +93,10 @@ def _conditions(db, job_id: str) -> list[dict]:
 
 
 def _measured(db, job_id: str) -> dict[str, dict]:
-    """condition id -> {lf, sf, ea}: what has been measured on the drawings so far."""
+    """condition id -> {lf, sf, ea}: what has been measured on the drawings so far in the base bid, so an
+    alternate's footage never leaks into the LF a base-bid order is built from."""
     out: dict[str, dict] = {}
-    for m in db.measurements.find({"job_id": job_id}):
+    for m in db.measurements.find({"job_id": job_id, **scope(job_id, None)}):
         row = out.setdefault(m["condition_id"], {"lf": 0.0, "sf": 0.0, "ea": 0.0})
         row[m["unit"]] += m["quantity"]
     return out

@@ -6,9 +6,9 @@
     GET  /api/drafts?job_id                the job's drafts, newest first
     GET  /events/pm?job_id                 SSE: each new ewo_drafts insert (change stream)
     POST /api/measurements                 points drawn on a sheet for a condition -> LF / SF / EA from the sheet scale
-    GET  /api/sheets/{id}/measurements     the sheet's measurements, oldest first
+    GET  /api/sheets/{id}/measurements     the sheet's measurements in one alternate, oldest first
     DELETE /api/measurements/{id}          remove one
-    POST /api/sheets/{id}/measurements/undo  remove the sheet's latest
+    POST /api/sheets/{id}/measurements/undo  remove the sheet's latest in one alternate
     GET  /api/jobs/{job_id}/quantities     measurements $grouped by condition and unit, sorted by type_tag
     POST /api/jobs/{job_id}/conditions/{cid}/order  priced order from the condition's measured LF
     POST /api/orders                       condition x LF x height -> priced order
@@ -141,8 +141,8 @@ def add_measurement(body: MeasurementIn):
 
 
 @router.get("/api/sheets/{sheet_id}/measurements")
-def list_measurements(sheet_id: str):
-    return jsonable(takeoff.list_measurements(sheet_id))
+def list_measurements(sheet_id: str, alternate_id: str | None = None):
+    return jsonable(takeoff.list_measurements(sheet_id, alternate_id))
 
 
 @router.delete("/api/measurements/{measurement_id}")
@@ -153,8 +153,8 @@ def delete_measurement(measurement_id: str):
 
 
 @router.post("/api/sheets/{sheet_id}/measurements/undo")
-def undo_measurement(sheet_id: str):
-    gone = takeoff.undo_last(sheet_id)
+def undo_measurement(sheet_id: str, alternate_id: str | None = None):
+    gone = takeoff.undo_last(sheet_id, alternate_id)
     if gone is None:
         raise HTTPException(404, "Nothing to undo on this sheet.")
     return {"deleted": str(gone["_id"]), "measurement": jsonable(gone)}
