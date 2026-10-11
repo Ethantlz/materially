@@ -1,9 +1,10 @@
 """Upload a drawing set; read back its sheets, conditions and rooms; re-parse a sheet picked by hand."""
+import math
 import re
 import shutil
 
 from fastapi import APIRouter, BackgroundTasks, Body, File, Form, HTTPException, Response, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.db import get_db, jsonable, now, oid
 from app.settings import get_settings
@@ -65,6 +66,40 @@ def set_scale(sheet_id: str, body: ScaleIn):
     if scale is None:
         raise HTTPException(422, f"Can't read scale {body.label!r}.")
     doc = scale.as_doc("manual", 1.0)
+    res = get_db().sheets.update_one({"_id": oid(sheet_id)}, {"$set": {"scale": doc}})
+    if not res.matched_count:
+        raise HTTPException(404, "No such sheet.")
+    return doc
+
+
+@router.get("/sheets/{sheet_id}")
+def get_sheet(sheet_id: str):
+    """One sheet for the takeoff canvas: image_path, image_scale (px per PDF pt), size_pt and scale among the rest."""
+    sheet = get_db().sheets.find_one({"_id": oid(sheet_id)})
+    if not sheet:
+        raise HTTPException(404, "No such sheet.")
+    return jsonable(sheet)
+
+
+class CalibrateIn(BaseModel):
+    p1: tuple[float, float]  # PDF points
+    p2: tuple[float, float]
+    real_ft: float = Field(gt=0)
+
+
+@router.post("/sheets/{sheet_id}/calibrate")
+def calibrate(sheet_id: str, body: CalibrateIn):
+    """Set the scale from a known length: two points on the sheet and the real distance between them."""
+    distance = math.dist(body.p1, body.p2)
+    if distance < 1:
+        raise HTTPException(422, "Pick two points further apart.")
+    pt_per_ft = round(distance / body.real_ft, 4)
+    if not 0.01 <= pt_per_ft <= 1000:
+        raise HTTPException(422, f"{pt_per_ft} pt per ft is outside 0.01 to 1000; check the length.")
+    ratio = round(864 / pt_per_ft, 2)  # real length / paper length: 72 pt per paper inch x 12 in per ft
+    label = f"calibrated 1:{ratio:g}"
+    doc = {"label": label, "pt_per_ft": pt_per_ft, "ratio": ratio, "source": "manual", "confidence": 1.0,
+           "candidates": [label], "calibration": {"p1": list(body.p1), "p2": list(body.p2), "real_ft": body.real_ft}}
     res = get_db().sheets.update_one({"_id": oid(sheet_id)}, {"$set": {"scale": doc}})
     if not res.matched_count:
         raise HTTPException(404, "No such sheet.")
