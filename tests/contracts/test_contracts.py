@@ -116,6 +116,21 @@ def test_run_task_raises_when_both_fail(db, monkeypatch):
     assert e.value.result == parse_json(BAD) and e.value.model == "deepseek-ai/DeepSeek-V4.1-Flash"
 
 
+def test_policy_params_reach_the_primary_model_only(db, monkeypatch):
+    seen = []
+
+    def call(model, system, user, params=None):
+        seen.append((model, params))
+        return (BAD if model.startswith("deepseek") else GOOD), 100, 20
+
+    monkeypatch.setattr(router, "call_model", call)
+    params = db.model_policy.find_one({"task": "price_extra"})["params"]
+    assert params["extra_body"]["chat_template_kwargs"]["thinking"] is False and params["timeout_s"] == 30
+    db.model_policy.update_one({"task": "parse_partition"}, {"$set": {"params": {"max_tokens": 900}}})
+    run_task("parse_partition", "A1 ...", "conditions", db=db)
+    assert seen == [("deepseek-ai/DeepSeek-V4.1-Flash", {"max_tokens": 900}), ("claude-sonnet-5-5", None)]
+
+
 def test_task_failed_carries_latest_invalid_answer(db, monkeypatch):
     monkeypatch.setattr(router, "call_model", _fake({"deepseek-ai/DeepSeek-V4.1-Flash": [BAD], "claude-sonnet-5-5": [BAD]}))
     with pytest.raises(TaskFailed) as e:

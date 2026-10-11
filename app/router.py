@@ -67,7 +67,7 @@ def _chat_client(model: str):
     raise RuntimeError(f"set LUMINAL_BASE_URL + LUMINAL_API_KEY, or LITELLM_API_KEY (env or {KEYS_PATH})")
 
 
-def call_model(model: str, system: str, user: str) -> tuple[str, int, int]:
+def call_model(model: str, system: str, user: str, params: dict | None = None) -> tuple[str, int, int]:
     """Returns (text, input_tokens, output_tokens). claude-* -> Anthropic API; anything else is
     OpenAI-compatible (openrouter/<id> -> OpenRouter, else Luminal or LiteLLM)."""
     if model.startswith("claude-"):
@@ -85,11 +85,15 @@ def call_model(model: str, system: str, user: str) -> tuple[str, int, int]:
         text = "".join(b.text for b in resp.content if b.type == "text")
         return text, resp.usage.input_tokens, resp.usage.output_tokens
     client, name = _chat_client(model)
+    params = params or {}  # model_policy.params: extra_body, timeout_s, max_tokens
+    if params.get("timeout_s"):
+        client = client.with_options(timeout=float(params["timeout_s"]), max_retries=0)
     resp = client.chat.completions.create(
         model=name,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0,
-        max_tokens=4000,
+        max_tokens=int(params.get("max_tokens") or 4000),
+        **({"extra_body": params["extra_body"]} if params.get("extra_body") else {}),
     )
     usage = resp.usage
     return resp.choices[0].message.content or "", getattr(usage, "prompt_tokens", 0), getattr(usage, "completion_tokens", 0)
@@ -113,12 +117,12 @@ def system_prompt(task: str, policy: dict, validator_name: str | None, system: s
     return out
 
 
-def _attempt(db, task, model, system, user, validator_name, job_id):
+def _attempt(db, task, model, system, user, validator_name, job_id, params=None):
     """One call. Returns (result, None, raw) on success, or (result, reason, raw) where result is the parsed
     answer that failed the contract, or None when the call failed or the JSON didn't parse."""
     t0 = time.perf_counter()
     try:
-        text, tin, tout = call_model(model, system, user)
+        text, tin, tout = call_model(model, system, user, params) if params else call_model(model, system, user)
     except Exception as e:
         log_usage(db, task=task, model=model, ms=(time.perf_counter() - t0) * 1000, job_id=job_id, ok=False, error=str(e))
         return None, f"{model} call failed: {e}", None
@@ -156,7 +160,8 @@ def run_task(task: str, payload, validator_name: str | None = None, *, job_id=No
     candidate = candidate_model = None
     for model, escalated in attempts:
         prompt = user if reason is None else f"{user}\n\nA previous answer was rejected: {reason}\nReturn corrected JSON only."
-        result, reason, raw = _attempt(db, task, model, sys_prompt, prompt, validator_name, job_id)
+        params = None if escalated else policy.get("params")  # options belong to the primary model only
+        result, reason, raw = _attempt(db, task, model, sys_prompt, prompt, validator_name, job_id, params)
         if reason is None:
             return {"result": result, "model": model, "escalated": escalated}
         if isinstance(result, dict):
