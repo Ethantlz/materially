@@ -706,16 +706,24 @@ $("#clist").addEventListener("keydown", (e) => {
   if (row) { e.preventDefault(); setCond(row.dataset.cid); }
 });
 
-// Scan partitions: the server re-reads the partition sheet and upserts every type (idempotent, D7). Reading
-// takes a while, so poll the job data for a few minutes; conditions land on the left as they are written.
+// Scan partitions: the server re-reads the partition sheets and upserts every type (idempotent, D7). A parse is
+// ~1 s a block now (parse_partition runs with DeepSeek's thinking off), so poll every 700 ms and stop as soon as
+// every tag the scan found is a condition; the button stays off until then, and 45 s is the give-up point.
 const scanBtn = $("#scan");
+const SCAN_POLL_MS = 700, SCAN_WAIT_MS = 45000;
 if (scanBtn) scanBtn.addEventListener("click", async (e) => {
   const b = e.currentTarget; b.disabled = true; b.textContent = "Scanning…";
   const r = await Takeoff.scan(S.job.id);
-  b.disabled = false; b.textContent = "Scan partitions";
-  if (!r.ok) return toast(r.data?.detail || "Scan failed", true);
+  if (!r.ok) { b.disabled = false; b.textContent = "Scan partitions"; return toast(r.data?.detail || "Scan failed", true); }
   toast(`Reading ${r.data.tags} partition types from ${r.data.sheets.map((s) => s.sheet_no).join(", ")}…`);
-  for (let i = 0; i < 20; i++) { await new Promise((ok) => setTimeout(ok, 1500)); await reloadData(true); }
+  const tags = [...new Set(r.data.sheets.flatMap((s) => s.tags || []))];
+  const waiting = () => tags.filter((t) => !S.conds.some((c) => c.type_tag === t));
+  for (let waited = 0; waited < SCAN_WAIT_MS && waiting().length; waited += SCAN_POLL_MS) {
+    await new Promise((ok) => setTimeout(ok, SCAN_POLL_MS));
+    await reloadData();
+  }
+  b.disabled = false; b.textContent = "Scan partitions";
+  toast(`${tags.length - waiting().length} partition types ready`);
 });
 async function goSource(cid) {  // jump to the condition's partition sheet with its box highlighted
   const c = cond(cid), s = c?.source;

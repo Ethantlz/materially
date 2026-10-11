@@ -246,6 +246,17 @@ def test_takeoff_js_renders_materials_and_scan():
     assert "Takeoff.scan(" in js
 
 
+def test_scan_handler_polls_without_forced_reloads():
+    """A no-thinking parse is ~1 s, so the scan handler polls every 700 ms and stops as soon as every tag the
+    scan found is in the conditions panel; the old 20 x 1.5 s forced-reload loop is gone."""
+    js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
+    handler = js[js.index('const scanBtn = $("#scan")'):]
+    handler = handler[: handler.index("\n});")]  # the scan button's click handler only
+    assert "reloadData(true)" not in handler
+    assert "reloadData()" in handler and "SCAN_POLL_MS = 700" in handler and "SCAN_WAIT_MS = 45000" in handler
+    assert "partition types ready" in handler
+
+
 def test_canvas_and_undo_follow_the_alternate():
     js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
     assert "Takeoff.undo(S.sheetId, S.altId)" in js

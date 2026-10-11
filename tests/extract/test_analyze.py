@@ -157,12 +157,13 @@ def test_failed_parse_goes_to_review(mock_db, job, named, monkeypatch):
     assert "gauge" in review["reason"] and review["doc"]["type_tag"] == "B1" and review["doc"]["text"].startswith("B1")
 
 
-def test_at_most_4_run_tasks_at_once(mock_db, job, named, monkeypatch):
+def test_at_most_8_run_tasks_at_once(mock_db, job, named, monkeypatch):
+    """One partition sheet's blocks (9 here) go to the model together, and LiteLLM's 30 req/min is not reached."""
     fake = Peak(parsed)
     monkeypatch.setattr(jev, "choice", keyword_jev)
     monkeypatch.setattr(router, "run_task", fake)
     analyze.analyze(mock_db, job, [named["A-501"]] * 3)  # 9 blocks
-    assert fake.peak == 4
+    assert fake.peak == 8
 
 
 def test_names_are_written_before_jev_is_asked(mock_db, job, synthetic_pdf, tmp_path, monkeypatch):

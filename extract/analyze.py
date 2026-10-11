@@ -7,6 +7,7 @@ title-keyword kind, store routing, and park the sheet in review_queue. Parsing: 
 run_task("parse_partition") per type-tag block, written with insert_or_review, so a condition MongoDB
 rejects lands in review_queue with the reason. Caps are process-wide, shared by every job.
 """
+import hashlib
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -25,7 +26,7 @@ from extract.sheetinfo import PageText, guess_kind
 from extract.store import insert_all
 
 JEV_AT_ONCE = 8  # jev.choice calls in flight
-TASKS_AT_ONCE = 4  # run_task calls in flight: LiteLLM caps DeepSeek at 30 requests/min
+TASKS_AT_ONCE = 8  # run_task calls in flight: one partition sheet's blocks at once, well under LiteLLM's 30 req/min
 _jev_slots = threading.BoundedSemaphore(JEV_AT_ONCE)
 _task_slots = threading.BoundedSemaphore(TASKS_AT_ONCE)
 
@@ -102,9 +103,18 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
 
     A re-parse of the same (job_id, type_tag) updates the condition in place, so measurements that point at
     it keep their condition; a name, colour or product a person or Task 6 added is kept. The find-one-then-write
-    is under a per-tag lock, so two parses of the same tag can't both insert it."""
+    is under a per-tag lock, so two parses of the same tag can't both insert it.
+
+    The block's text is hashed onto the condition (source.text_hash): a scan of a drawing whose type blocks
+    haven't changed hands every block back as it stands and calls no model at all."""
     sheet_id = str(sheet["_id"])
-    source = {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox}
+    text_hash = hashlib.sha1(block.text.strip().encode()).hexdigest()
+    unchanged = db.conditions.find_one(
+        {"job_id": job_id, "type_tag": block.tag, "parent_id": None, "source.text_hash": text_hash}, {"_id": 1}
+    )
+    if unchanged is not None:
+        return unchanged["_id"]
+    source = {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox, "text_hash": text_hash}
     try:
         with _task_slots:
             out = router.run_task("parse_partition", block.text, "conditions", job_id=job_id, db=db)

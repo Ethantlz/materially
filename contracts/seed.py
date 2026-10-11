@@ -23,7 +23,7 @@ SUPPLIER = "Sample Supply Co"
 
 # EWO drafts are on camera: DeepSeek's reasoning made them ~90 s (and ran out of tokens); off, they take ~2 s.
 # Luminal's servers don't all honour the same switch, so send all three. A draft is ~350 tokens: the 900 cap
-# and 30 s timeout make a server that reasons anyway fail fast into the Sonnet retry. Partition parsing keeps reasoning.
+# and 30 s timeout make a server that reasons anyway fail fast into the Sonnet retry.
 FAST = {
     "extra_body": {"chat_template_kwargs": {"thinking": False, "enable_thinking": False}, "reasoning_effort": "none"},
     "timeout_s": 30,
@@ -31,9 +31,15 @@ FAST = {
 }
 EWO_TASKS = ("price_extra", "base_scope_check", "backcharge")
 
+# Partition parsing had the same problem, bigger: 62 s a block with DeepSeek's thinking on through LiteLLM, 0.7 s
+# off. A wall type reads longer than a draft, so PARSE keeps FAST's switches with a 1500-token cap; a server that
+# reasons anyway burns the 30 s timeout and fails fast into the Sonnet retry.
+PARSE = {"extra_body": FAST["extra_body"], "timeout_s": 30, "max_tokens": 1500}
+PARAMS = {"parse_partition": PARSE, **{task: FAST for task in EWO_TASKS}}
+
 MODEL_POLICY = [
     {"task": task, "tier": "quick", "model": DEEPSEEK, "retry_model": SONNET, "enabled": True,
-     **({"params": FAST} if task in EWO_TASKS else {})}
+     **({"params": PARAMS[task]} if task in PARAMS else {})}
     for task in ("parse_partition", "extract_product_attrs", *EWO_TASKS)
 ]
 
