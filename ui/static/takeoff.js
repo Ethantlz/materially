@@ -41,7 +41,10 @@ const S = {
   k: 1, tx: 0, ty: 0, fitK: 1, fitted: true, iw: 0, ih: 0, ips: 1.5, loaded: false,
   meas: [], qty: new Map(), qtyOk: true, measOk: true,
   draft: null, sel: null, cal: null, cur: null, cursor: null, shift: false, space: false, down: null, qtySig: "",
+  open: null, products: {},  // open = condition id whose materials are expanded; products = condition id -> {product_id: doc}
 };
+
+const SPEC_FLAG = 0.7;  // P(mismatch) above this marks a spec check as a warning
 
 const sheet = () => S.sheets.find((s) => s.id === S.sheetId) || null;
 const cond = (id = S.condId) => S.conds.find((c) => c.id === id) || null;
@@ -193,13 +196,30 @@ function renderToolbar() {
 function condRow(c, i) {
   const tag = esc(c.type_tag), nm = esc(shortName(c));
   const src = c.source && c.source.sheet ? sheetById(c.source.sheet) : null;
+  const open = S.open === c.id;
   return `<div class="crow ${c.id === S.condId ? "active" : ""}" data-cid="${c.id}" data-testid="cond-row" style="--c:${esc(c.color)}" role="button" tabindex="0" aria-pressed="${c.id === S.condId}">
     <span class="cswatch" data-testid="cond-swatch"></span>
     <div><div class="ctop"><b class="ctag" data-testid="cond-tag">${tag}</b><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span></div>
-      <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div></div>
-    <div class="cside"><span class="cactive" data-testid="cond-active">ACTIVE</span>
+      <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div>
+      ${open ? materialsHtml(c) : ""}</div>
+    <div class="cside"><button type="button" class="btn-ghost sm" data-expand="${c.id}" data-testid="cond-expand" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the materials ${tag} is built from" title="${open ? "Hide" : "Show"} the materials this type is built from">${open ? "▾" : "▸"}</button><span class="cactive" data-testid="cond-active">ACTIVE</span>
       ${src ? `<button type="button" class="csrc" data-src="${c.id}" data-testid="cond-source" title="Show where ${tag} is defined on ${esc(src.sheet_no || "its sheet")}">${esc(src.sheet_no || "source")} ↗</button>` : `<span class="ckey">${i < 9 ? i + 1 : ""}</span>`}</div>
   </div>`;
+}
+
+// What a wall type is built from: one row per material, linked to its product_data doc once it has been searched.
+function materialsHtml(c) {
+  const prods = S.products[c.id] || {};
+  const rows = (c.materials || []).map((m) => {
+    const p = m.product_id && prods[m.product_id];
+    const checks = p ? Object.entries(p.spec_check || {}).map(([a, v]) =>
+      `<span class="pill ${v > SPEC_FLAG ? "bad" : "ok"}" title="P(mismatch) ${v}">${esc(a)} ${v > SPEC_FLAG ? "✗" : "✓"}</span>`).join(" ") : "";
+    const product = p
+      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" data-testid="material-product">${esc(p.title || "product sheet")}</a> ${checks}`
+      : `<button class="btn-ghost sm" data-find="${esc(m.key)}" data-testid="material-find">Find product</button>`;
+    return `<li class="mat" data-testid="material-row"><div>${esc(m.desc)}${m.source === "assumed" ? ' <span class="pill">assumed</span>' : ""}</div><div class="small">${product}</div></li>`;
+  }).join("");
+  return `<ul class="mats" data-testid="cond-materials">${rows || '<li class="muted small">No materials listed for this type.</li>'}</ul>`;
 }
 function renderConds() {
   const list = $("#clist");
@@ -623,7 +643,27 @@ $("#scale-menu").addEventListener("click", (e) => {
 document.addEventListener("click", (e) => { if (!e.target.closest("#scale-menu, #help, #scale-chip, #btn-help")) hideMenus(); });
 $("#rail").addEventListener("click", (e) => { const row = e.target.closest("[data-sheet]"); if (row && row.dataset.sheet !== S.sheetId) openSheet(row.dataset.sheet); });
 
-$("#clist").addEventListener("click", (e) => {
+$("#clist").addEventListener("click", async (e) => {
+  const ex = e.target.closest("[data-expand]");
+  if (ex) {  // expand a condition into the materials it is built from
+    const id = ex.dataset.expand;
+    S.open = S.open === id ? null : id;
+    if (S.open && !S.products[id]) {
+      const r = await Takeoff.products(id);
+      S.products[id] = Object.fromEntries((r.ok ? r.data : []).map((p) => [p.id, p]));
+    }
+    return renderConds();
+  }
+  const f = e.target.closest("[data-find]");
+  if (f) {  // one material -> a product_data doc through the procure lane (409 until the Firecrawl key exists)
+    f.disabled = true; f.textContent = "Searching…";
+    const row = f.closest("[data-cid]"), cid = row.dataset.cid;
+    const r = await Takeoff.findProducts(cid, f.dataset.find);
+    if (!r.ok) { toast(r.data?.detail || "Product search failed", true); f.disabled = false; f.textContent = "Find product"; return; }
+    S.products[cid] = { ...(S.products[cid] || {}), [r.data.id]: r.data };
+    await reloadData(true);
+    return;
+  }
   const src = e.target.closest("[data-src]");
   if (src) return void goSource(src.dataset.src);
   const row = e.target.closest("[data-cid]");
@@ -633,6 +673,18 @@ $("#clist").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   const row = e.target.closest("[data-cid]");
   if (row) { e.preventDefault(); setCond(row.dataset.cid); }
+});
+
+// Scan partitions: the server re-reads the partition sheet and upserts every type (idempotent, D7). Reading
+// takes a while, so poll the job data for a few minutes; conditions land on the left as they are written.
+const scanBtn = $("#scan");
+if (scanBtn) scanBtn.addEventListener("click", async (e) => {
+  const b = e.currentTarget; b.disabled = true; b.textContent = "Scanning…";
+  const r = await Takeoff.scan(S.job.id);
+  b.disabled = false; b.textContent = "Scan partitions";
+  if (!r.ok) return toast(r.data?.detail || "Scan failed", true);
+  toast(`Reading ${r.data.tags} partition types from ${r.data.sheets.map((s) => s.sheet_no).join(", ")}…`);
+  for (let i = 0; i < 20; i++) { await new Promise((ok) => setTimeout(ok, 1500)); await reloadData(true); }
 });
 async function goSource(cid) {  // jump to the condition's partition sheet with its box highlighted
   const c = cond(cid), s = c?.source;
