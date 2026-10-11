@@ -1,4 +1,4 @@
-"""Upload a drawing set and read back its sheets."""
+"""Upload a drawing set; read back its sheets, conditions and rooms; re-parse a sheet picked by hand."""
 import re
 import shutil
 
@@ -7,7 +7,9 @@ from pydantic import BaseModel
 
 from app.db import get_db, jsonable, now, oid
 from app.settings import get_settings
-from extract.ingest import ingest
+from extract.analyze import parse_blocks
+from extract.ingest import ingest, read_sheet_page
+from extract.partitions import partition_blocks
 from extract.scale import parse_label
 
 router = APIRouter(prefix="/api", tags=["extract"])
@@ -66,3 +68,51 @@ def set_scale(sheet_id: str, body: ScaleIn):
     if not res.matched_count:
         raise HTTPException(404, "No such sheet.")
     return doc
+
+
+def _job_or_404(db, job_id: str) -> None:
+    if not db.jobs.find_one({"_id": oid(job_id)}, {"_id": 1}):
+        raise HTTPException(404, "No such job.")
+
+
+@router.get("/jobs/{job_id}/sheets")
+def job_sheets(job_id: str):
+    db = get_db()
+    _job_or_404(db, job_id)
+    return jsonable(list(db.sheets.find({"job_id": job_id}).sort("page", 1)))
+
+
+@router.get("/jobs/{job_id}/conditions")
+def job_conditions(job_id: str):
+    db = get_db()
+    _job_or_404(db, job_id)
+    return jsonable(list(db.conditions.find({"job_id": job_id}).sort([("type_tag", 1), ("_id", 1)])))
+
+
+@router.get("/jobs/{job_id}/rooms")
+def job_rooms(job_id: str, sheet: str | None = None):
+    db = get_db()
+    _job_or_404(db, job_id)
+    query = {"job_id": job_id, **({"sheet": sheet} if sheet else {})}
+    return jsonable(list(db.rooms.find(query).sort([("sheet", 1), ("number", 1)])))
+
+
+@router.post("/sheets/{sheet_id}/parse")
+def parse_picked_sheet(sheet_id: str, background: BackgroundTasks):
+    """Checkpoint A fallback: parse partition types on a sheet a person picked. Replaces that sheet's
+    conditions; the new ones arrive at GET /api/jobs/{job_id}/conditions as each block is parsed."""
+    db = get_db()
+    sheet = db.sheets.find_one({"_id": oid(sheet_id)})
+    if not sheet:
+        raise HTTPException(404, "No such sheet.")
+    job_id = sheet["job_id"]
+    page = read_sheet_page(get_settings().data_dir / job_id / "source" / sheet["file"], sheet["file_page"])
+    blocks = partition_blocks(page)
+    if not blocks:
+        raise HTTPException(422, "No partition type tags found on this sheet.")
+    if sheet["kind"] != "partition_types":
+        routing = {"method": "manual", "previous_kind": sheet["kind"], "previous": sheet.get("routing")}
+        db.sheets.update_one({"_id": sheet["_id"]}, {"$set": {"kind": "partition_types", "routing": routing}})
+    db.conditions.delete_many({"job_id": job_id, "source.sheet": sheet_id})
+    background.add_task(parse_blocks, db, job_id, sheet, blocks)
+    return {"sheet_id": sheet_id, "tags": [b.tag for b in blocks]}

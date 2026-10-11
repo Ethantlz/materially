@@ -82,6 +82,13 @@ def sheet_docs(job_id: str, files: list[tuple[str, list[PageText]]]) -> list[dic
     return docs
 
 
+def read_sheet_page(pdf_path: Path, file_page: int) -> PageText:
+    """One page of a file, with its title block located against the rest of that file."""
+    pages = read_pages(pdf_path)
+    locate_title_blocks(pages, common_title_block_text(pages))
+    return pages[file_page - 1]
+
+
 def render(pdf_path: Path, file_page: int, out_dir: Path, stem: str) -> tuple[Path, Path, float]:
     pdf = pdfium.PdfDocument(pdf_path)
     try:

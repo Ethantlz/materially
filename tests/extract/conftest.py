@@ -30,3 +30,21 @@ def sheet_by_no(synthetic_pages):
     from scripts.make_drawing_set import SHEETS
 
     return {no: p for (no, *_), p in zip(SHEETS, synthetic_pages)}
+
+
+@pytest.fixture
+def client(monkeypatch):
+    """The app on a fresh mongomock database, model keys blanked (fake jev/run_task where a test needs them)."""
+    import uuid
+
+    from fastapi.testclient import TestClient
+
+    import app.main as main
+
+    monkeypatch.setenv("MONGODB_URI", "mongomock://")
+    monkeypatch.setenv("DB_NAME", f"test_{uuid.uuid4().hex[:8]}")
+    monkeypatch.setenv("DATA_DIR", str(main.data_dir))  # where /data is mounted
+    for key in ("OPENROUTER_API_KEY", "LITELLM_API_KEY", "LUMINAL_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.setenv(key, "")
+    with TestClient(main.app) as c:
+        yield c

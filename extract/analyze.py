@@ -98,11 +98,15 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
     return insert_or_review(db, "conditions", doc, "extract.partition")
 
 
-def parse_sheet(db: Database, job_id: str, sheet: dict, page: PageText) -> list[ObjectId | None]:
-    """Parse every type-tag block on one sheet, TASKS_AT_ONCE at a time."""
-    blocks = partition_blocks(page)
+def parse_blocks(db: Database, job_id: str, sheet: dict, blocks: list[Block]) -> list[ObjectId | None]:
+    """Parse blocks from one sheet, TASKS_AT_ONCE at a time."""
     with ThreadPoolExecutor(TASKS_AT_ONCE) as pool:
         return list(pool.map(lambda b: parse_block(db, job_id, sheet, b), blocks))
+
+
+def parse_sheet(db: Database, job_id: str, sheet: dict, page: PageText) -> list[ObjectId | None]:
+    """Parse every type-tag block on one sheet."""
+    return parse_blocks(db, job_id, sheet, partition_blocks(page))
 
 
 def add_rooms(db: Database, job_id: str, sheet: dict, page: PageText) -> int:
