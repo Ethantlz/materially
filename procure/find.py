@@ -5,6 +5,7 @@ saved before the Jev checks, so a failed check leaves an unchecked doc rather th
 import hashlib
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 
 import httpx
@@ -22,6 +23,7 @@ FIRECRAWL = "https://api.firecrawl.dev/v2/search"
 LIMIT = 3  # results per search; each is scraped to markdown, which is what costs credits
 QUERY_MAX = 500  # Firecrawl rejects a longer query
 CHECKED = ("thickness_in", "board_type", "gauge", "size_in")  # material attributes a product must match
+CHECK_AT_ONCE = 4  # Jev spec checks run at the same time for one product (there are at most len(CHECKED))
 BLOCKED = {  # an account-level problem: asking again for the next material would fail the same way
     401: "Firecrawl rejected the key",
     402: "Firecrawl is out of credits",
@@ -76,6 +78,11 @@ def query_for(material: dict) -> str:
     return (q or str(material.get("key") or "product"))[:QUERY_MAX].strip()
 
 
+def _http_url(url) -> str | None:
+    """Product links are only ever http(s): a javascript:/data: URL from a search result is dropped."""
+    return url if isinstance(url, str) and re.match(r"https?://", url) else None
+
+
 def _hash(query: str, domains: list[str]) -> str:
     return hashlib.sha1((query.lower() + "|" + ",".join(sorted(domains))).encode()).hexdigest()
 
@@ -124,11 +131,22 @@ def _p_mismatch(material: dict, attrs: dict, attr: str, job_id: str) -> float:
         raise SearchFailed(f"Couldn't spec-check the product: {e}") from None
 
 
+def _checks(material: dict, attrs: dict, job_id: str) -> dict:
+    """p(mismatch) for each specified attribute, the Jev calls running concurrently. Every call finishes before this
+    returns; if any failed, the first failure in CHECKED order is raised (as the one-by-one loop did)."""
+    wanted = [a for a in CHECKED if material.get(a) is not None]
+    if not wanted:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(CHECK_AT_ONCE, len(wanted))) as pool:
+        futures = {a: pool.submit(_p_mismatch, material, attrs, a, job_id) for a in wanted}
+    return {a: round(f.result(), 3) for a, f in futures.items()}
+
+
 def _spec_check(db, doc: dict, material: dict, job_id: str) -> dict:
     """Ask Jev about each specified attribute and store the answers with checked True. If Jev fails the doc stays
     unchecked (the paid search is kept) and comes back with a `check_error`, which is never stored."""
     try:
-        checks = {a: round(_p_mismatch(material, doc.get("attrs") or {}, a, job_id), 3) for a in CHECKED if material.get(a) is not None}
+        checks = _checks(material, doc.get("attrs") or {}, job_id)
     except SearchFailed as e:
         log.warning("spec check failed for product %s: %s", doc["_id"], e)
         return {**doc, "check_error": str(e)}
@@ -158,7 +176,7 @@ def find_for_material(condition_id: str, key: str) -> dict:
         except TaskFailed as e:
             raise LookupError(f"Couldn't read the product sheet: {e.reason}") from None
         # Saved before the Jev checks: a failed check must not throw away a search that was paid for.
-        doc = {"query_hash": qhash, "condition_id": condition_id, "component": key, "url": top.get("url"), "title": top.get("title"),
+        doc = {"query_hash": qhash, "condition_id": condition_id, "component": key, "url": _http_url(top.get("url")), "title": top.get("title"),
                "domains": domains, "attrs": attrs, "spec_check": {}, "checked": False, "fetched_at": now()}
         try:
             doc["_id"] = db.product_data.insert_one(doc).inserted_id
