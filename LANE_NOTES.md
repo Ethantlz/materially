@@ -14,7 +14,6 @@ Status: open
 
 ## Entries
 
-<<<<<<< HEAD
 ### extract · 14:31 · merge notes (no app/ or contracts/ changes needed)
 - **`tests/test_upload_flow.py`** (shared file): it now asserts `scale_source`, and sets `MONGODB_URI`, `DB_NAME`,
   `DATA_DIR` and blank model keys per test with `monkeypatch`. It used to set `MONGODB_URI=mongomock://` at import,
@@ -72,3 +71,18 @@ gives stud size, rating and STC but leaves gauge to the specs. Use a default fro
 shaft-wall C-H studs) and mark the line as assumed, so the order and PO say "20 ga (assumed)".
 Why: without it every WCU condition prices as `stud_3.625_Nonega_10ft` (unpriced).
 Status: open
+
+### extract · 15:20 · WCU A003 schedule columns parse end to end (no app/ or contracts/ change needed)
+- `extract/partitions.py` has a schedule layout: wall-family labels (SA, SB, ...) that prefix the tags anchor the
+  cell grouping, and each tag heading a schedule column is one block: the family callouts, then
+  `SCHEDULE COLUMN <tag>:` with one `<row label>: <values>` line per row. Tags outside every family (the WALL TAG
+  LEGEND's SA4) are ignored. Sheets without family labels use the tag + nearby text grouping as before.
+- Live on lane1: SA4, SC2, SC4, SD4, SH2, SH4, SH6 inserted (DeepSeek, none escalated); SB2 in review_queue with
+  `studs.size_in: expected number, got NoneType None; sides: None not one of [1, 2]`. That reason comes from
+  run_task's contract check (the same `$jsonSchema` rules, after the Sonnet retry), so SB2 never reaches a MongoDB
+  insert. For the beat to show MongoDB itself rejecting, the router would have to hand the failed result to the
+  caller instead of raising TaskFailed.
+- `tests/extract/test_demo.py` runs when `fixtures/demo.pdf` exists (live part needs LITELLM_API_KEY).
+- Removed a stray `<<<<<<< HEAD` line left in this file by the 14:45 merge.
+Status: info
+
