@@ -16,6 +16,7 @@ from pymongo.errors import WriteError
 
 from app.db import insert_or_review, oid
 from contracts.validate import validate
+from extract.materials import derive
 
 PALETTE = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
@@ -173,14 +174,41 @@ def _get(db: Database, condition_id: str) -> dict:
     return doc
 
 
+BUILD_ROLES = ("stud", "track", "board")  # the material rows derive() makes from studs / layers / sides alone
+
+
+def rebuilt_materials(materials: list[dict], condition: dict) -> list[dict]:
+    """A condition's materials after its build was edited by hand: the stud, track and board rows again from the
+    edited build, the rows only the callout text gave (insulation, resilient channel, sealant …) as they were. A row
+    keeps the product found for it only while it is still the same material (key and attributes)."""
+    before = {m.get("key"): m for m in materials}
+    out = []
+    for m in (m for m in derive(condition) if m["role"] in BUILD_ROLES):
+        was = before.get(m["key"]) or {}
+        same = was and all(was.get(k) == v for k, v in m.items() if k not in ("desc", "source"))
+        out.append({**m, "product_id": was["product_id"]} if same and was.get("product_id") else m)
+    stud_in = (condition.get("studs") or {}).get("size_in")
+    for m in (m for m in materials if m.get("role") not in BUILD_ROLES):
+        if m.get("role") == "insulation" and "size_in" in m and m["size_in"] != stud_in:  # a batt fills the stud cavity
+            m = {**m, "size_in": stud_in, "product_id": None}
+        out.append(m)
+    return out
+
+
 def patch(db: Database, condition_id: str, fields: dict) -> dict:
+    """Edit a condition. A height (sub-condition) takes its build from its wall type, so only its own name, colour and
+    height_ft change here; an edit to a wall type's build rebuilds its materials and goes to its heights too."""
     old = _get(db, condition_id)
     fields = _content(fields)
     if isinstance(fields.get("studs"), dict):  # edit one stud field without restating the others
         fields["studs"] = {**(old.get("studs") or {}), **fields["studs"]}
+    if old.get("parent_id") and any(fields[k] != old.get(k) for k in set(fields) & set(ASSEMBLY)):
+        raise Refused(422, "A height takes its build from its wall type; edit the wall type instead.")
     new = {**old, **fields}
     if "name" not in fields and old.get("name") in (None, name_for(old)):  # an auto name follows the edit
         new["name"] = name_for(new)
+    if old.get("materials") and any(new.get(k) != old.get(k) for k in ("studs", "layers_each_side", "sides")):
+        new["materials"] = rebuilt_materials(old["materials"], new)
     errors = validate("conditions", {k: v for k, v in new.items() if k != "_id"})
     if errors:
         raise Refused(422, "; ".join(errors[:8]))
@@ -190,7 +218,26 @@ def patch(db: Database, condition_id: str, fields: dict) -> dict:
             db.conditions.update_one({"_id": old["_id"]}, {"$set": changed})
     except WriteError as e:
         raise Refused(422, str(e.details.get("errmsg", e)) if e.details else str(e)) from e
+    _heights_follow(db, old, new, changed)
     return db.conditions.find_one({"_id": old["_id"]})
+
+
+def _heights_follow(db: Database, old: dict, new: dict, changed: dict) -> None:
+    """A wall type's edited build goes to its heights, as a re-scan's does (extract.analyze._sync_heights). Each
+    height keeps its own _id, colour, height_ft and the products found for materials that didn't change, and an
+    auto name ("<wall type's name> @ 10'") follows the wall type's."""
+    build = {k: new[k] for k in ASSEMBLY if k in changed and k != "materials"}
+    if not build and "name" not in changed:
+        return
+    for child in db.conditions.find({"parent_id": str(old["_id"])}):
+        set_ = dict(build)
+        if "materials" in changed:
+            set_["materials"] = rebuilt_materials(child.get("materials") or new["materials"], {**child, **build})
+        h = child.get("height_ft")
+        if h is not None and child.get("name") == f"{old.get('name') or name_for(old)} @ {h:g}'":
+            set_["name"] = f"{new.get('name') or name_for(new)} @ {h:g}'"
+        if set_:
+            db.conditions.update_one({"_id": child["_id"]}, {"$set": set_})
 
 
 def delete(db: Database, condition_id: str) -> None:

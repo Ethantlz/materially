@@ -154,3 +154,14 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--accent)
 .hform { display: flex; align-items: center; gap: 6px; margin-top: 5px; cursor: default; }
 .hform input { width: 64px; height: 28px; padding: 0 7px; font-size: 12.5px; }
 .hform button { flex: none; height: 28px; }
+
+/* edit a condition: the pencil beside the materials toggle, and the form's title / note */
+.cbtns { display: flex; gap: 2px; }
+.cside .btn-ghost.sm.cedit { padding: 0 4px; color: var(--faint); }
+.crow:hover .cedit, .crow.active .cedit { color: var(--muted); } .cside .cedit:hover { color: var(--ink); }
+.cedit .ic { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.cond-form .ftitle { font-weight: 600; font-size: 12.5px; margin-bottom: 8px; }
+.cond-form .fnote { color: var(--warn); margin: -2px 0 8px; } .cond-form .fnote[hidden] { display: none; }
+.cond-form select:disabled { color: var(--faint); background: var(--surface2); }
+/* measure result */
+.pop .mlen { font: 700 20px system-ui; font-variant-numeric: tabular-nums; margin: 2px 0 4px; }

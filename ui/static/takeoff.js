@@ -237,7 +237,7 @@ function condRow(c, i) {
       <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div></div>
       ${sub ? "" : addHeightHtml(c)}
       ${open ? materialsHtml(c) : ""}</div>
-    <div class="cside"><button type="button" class="btn-ghost sm" data-expand="${c.id}" data-testid="cond-expand" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the materials ${tag} is built from" title="${open ? "Hide" : "Show"} the materials this type is built from">${open ? "▾" : "▸"}</button><span class="cactive" data-testid="cond-active">ACTIVE</span>
+    <div class="cside"><div class="cbtns"><button type="button" class="btn-ghost sm cedit" data-edit="${c.id}" data-testid="cond-edit" aria-label="Edit ${tag}${sub ? ` @ ${esc(+c.height_ft)}'` : ""}" title="Edit ${tag}${sub ? ` @ ${esc(+c.height_ft)}'` : ""}"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg></button><button type="button" class="btn-ghost sm" data-expand="${c.id}" data-testid="cond-expand" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the materials ${tag} is built from" title="${open ? "Hide" : "Show"} the materials this type is built from">${open ? "▾" : "▸"}</button></div><span class="cactive" data-testid="cond-active">ACTIVE</span>
       ${src ? `<button type="button" class="csrc" data-src="${c.id}" data-testid="cond-source" title="Show where ${tag} is defined on ${esc(src.sheet_no || "its sheet")}">${esc(src.sheet_no || "source")} ↗</button>` : `<span class="ckey">${i < 9 ? i + 1 : ""}</span>`}</div>
   </div>`;
 }
@@ -446,7 +446,8 @@ function renderCal() {
   const a = toImg(c.p1), b = c.p2 ? toImg(c.p2) : S.cur ? toImg(S.cur) : null;
   if (b) {
     svgEl("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1] }, gCal);
-    svgEl("text", { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, dy: "-0.8em" }, gCal).textContent = `${Math.round(dist(c.p1, c.p2 || S.cur))} pt`;
+    const pt = dist(c.p1, c.p2 || S.cur), ppf = ptPerFt();
+    svgEl("text", { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, dy: "-0.8em" }, gCal).textContent = S.tool === "measure" && ppf ? fmtFtIn(pt / ppf) : `${Math.round(pt)} pt`;
   }
   svgEl("circle", { cx: a[0], cy: a[1] }, gCal);
   if (c.p2) svgEl("circle", { cx: b[0], cy: b[1] }, gCal);
@@ -458,6 +459,7 @@ function updateHint() {
   if (!sh || !S.loaded) html = `<span class="dim">${sh ? "Loading the sheet…" : "No sheet open"}</span>`;
   else if (S.focus && S.focus.sheet === sh.id && S.tool === "select") html = `Source of <b>${esc(S.focus.tag)}</b> on ${esc(sh.sheet_no || "this sheet")} <button type="button" id="clear-focus">Clear</button>`;
   else if (S.tool === "select") html = `<b>Select</b> <span class="dim">· click a measurement, Delete removes it · pick a condition to measure</span>`;
+  else if (S.tool === "measure") html = `<b>Measure</b> <span class="dim">· ${S.cal && !S.cal.p2 ? "click the second point" : ptPerFt() ? `click two points to check a distance at ${esc(sh.scale?.label || "this scale")}` : "this sheet has no scale yet: distances show in points"}</span>`;
   else if (S.tool === "calibrate") html = `<b>Calibrate</b> <span class="dim">· ${S.cal && !S.cal.p2 ? "click the second point" : "click two points on a dimension you know"}</span>`;
   else if (!c) html = `<span class="dim">Pick a condition on the left to measure</span>`;
   else {
@@ -480,17 +482,17 @@ function setTool(t) {
 function setCond(id, arm = true) {
   if (S.draft && S.draft.cond !== id) finishDraft();
   S.condId = id; syncUrl(); renderConds();
-  if (arm && (S.tool === "select" || S.tool === "calibrate")) setTool("linear"); else { renderToolbar(); updateHint(); }
+  if (arm && ["select", "calibrate", "measure"].includes(S.tool)) setTool("linear"); else { renderToolbar(); updateHint(); }
 }
 function flash(el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
 function needCondition() { toast("Pick a condition on the left first.", true); flash($("#panel")); }
 function needScale() { toast("Set or calibrate this sheet's scale first.", true); flash($("#noscale")); }
 
 function snap(p) {  // shift: constrain the next point to 45 degree steps from the last (a dragged wall: to horizontal / vertical)
-  const d = S.draft;
-  if (!S.shift || !d || !d.points.length || d.kind === "count") return p;
-  const a = d.points[d.points.length - 1], dx = p[0] - a[0], dy = p[1] - a[1], len = Math.hypot(dx, dy);
-  if (d.drag) return Math.abs(dx) >= Math.abs(dy) ? [p[0], a[1]] : [a[0], p[1]];
+  const d = S.draft, line = S.cal && !S.cal.p2 ? S.cal : null;  // a measure / calibrate line snaps from its first point
+  if (!S.shift || (!line && (!d || !d.points.length || d.kind === "count"))) return p;
+  const a = line ? line.p1 : d.points[d.points.length - 1], dx = p[0] - a[0], dy = p[1] - a[1], len = Math.hypot(dx, dy);
+  if (d && d.drag) return Math.abs(dx) >= Math.abs(dy) ? [p[0], a[1]] : [a[0], p[1]];
   const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
   return [a[0] + len * Math.cos(ang), a[1] + len * Math.sin(ang)];
 }
@@ -594,7 +596,8 @@ function calPoint(p) {
   if (!S.cal || S.cal.p2) { S.cal = { p1: p, p2: null }; hideCalPop(); }
   else {
     if (dist(S.cal.p1, p) < 2) return;
-    S.cal.p2 = p; showCalPop();
+    S.cal.p2 = p;
+    if (S.tool === "measure") showMeasPop(); else showCalPop();
   }
   renderCal(); updateHint();
 }
@@ -604,14 +607,29 @@ function showCalPop() {
   $("#cal-err").textContent = ""; $("#cal-len").value = "";
   pop.hidden = false; positionCalPop(); $("#cal-len").focus();
 }
+// Measure: the distance between two clicks at the sheet's scale, to check against a dimension printed on the drawing.
+// If it's off, "Calibrate from this" opens the calibrate form on the same two points.
+function showMeasPop() {
+  const c = S.cal, sh = sheet(), ppf = ptPerFt(), pt = dist(c.p1, c.p2);
+  $("#meas-len").textContent = ppf ? fmtFtIn(pt / ppf) : `${Math.round(pt)} pt`;
+  $("#meas-note").textContent = ppf ? `At ${sh.scale.label} (${scaleNote(sh.scale)}). Doesn't match the drawing? Calibrate from this line.`
+    : "This sheet has no scale yet. Calibrate from this line if you know its real length.";
+  $("#meas-pop").hidden = false; positionCalPop();
+}
+function measToCalibrate() {
+  const c = S.cal;
+  if (!c || !c.p2) return;
+  setTool("calibrate");
+  S.cal = c; renderCal(); showCalPop(); updateHint();
+}
 function positionCalPop() {
-  const pop = $("#cal-pop");
+  const pop = $("#cal-pop").hidden ? $("#meas-pop") : $("#cal-pop");
   if (pop.hidden || !S.cal || !S.cal.p2) return;
   const [x, y] = toView(S.cal.p2), r = vpRect();
   pop.style.left = clamp(x + 16, 8, r.width - pop.offsetWidth - 8) + "px";
   pop.style.top = clamp(y + 12, 56, r.height - pop.offsetHeight - 8) + "px";
 }
-function hideCalPop() { $("#cal-pop").hidden = true; }
+function hideCalPop() { $("#cal-pop").hidden = true; $("#meas-pop").hidden = true; }
 async function applyCal() {
   const c = S.cal, ft = parseLength($("#cal-len").value);
   if (!c || !c.p2) return;
@@ -686,7 +704,7 @@ vp.addEventListener("pointerup", (e) => {
   if (!S.loaded) return;
   const p = pointAt(e);
   if (S.tool === "select") select(d.mid);
-  else if (S.tool === "calibrate") calPoint(p);
+  else if (S.tool === "calibrate" || S.tool === "measure") calPoint(p);
   else addPoint(p);
 });
 vp.addEventListener("pointercancel", () => { S.down = null; vp.classList.remove("panning"); if (S.draft && S.draft.drag) cancelDraft(); });
@@ -723,7 +741,7 @@ document.addEventListener("keydown", (e) => {
   if (k === "enter") { if (t.tagName === "BUTTON" || t.classList.contains("crow")) return; return void finishDraft(); }
   if (k === "escape") return onEscape();
   if (k === "delete" || k === "backspace") { e.preventDefault(); return S.draft ? undo() : void deleteSelected(); }
-  const tools = { v: "select", l: "linear", a: "area", c: "count", k: "calibrate" };
+  const tools = { v: "select", l: "linear", a: "area", c: "count", m: "measure", k: "calibrate" };
   if (tools[k]) return setTool(tools[k]);
   if (k === "f") return fit();
   if (k === "q") return toggleDrawer();
@@ -767,6 +785,8 @@ $("#clist").addEventListener("click", async (e) => {
     if (e.target.closest("[data-hcancel]")) { S.addH = null; renderConds(); }
     return;
   }
+  const ed = e.target.closest("[data-edit]");
+  if (ed) return openEdit(ed.dataset.edit);
   const ah = e.target.closest("[data-addh]");
   if (ah) { S.addH = { cid: ah.dataset.addh, value: "" }; renderConds(); return void $(".hform input", $("#clist"))?.focus(); }
   const pull = e.target.closest("[data-pull]");
@@ -877,17 +897,99 @@ async function goSource(cid) {  // jump to the condition's partition sheet with 
   else { setTool("select"); renderFocus(); if (S.focus) zoomToBox(S.focus.bbox); updateHint(); }
 }
 
-// new condition form
+// new condition form; the same form edits a condition (the pencil on its row)
 const form = $("#cond-form");
 const nextColor = () => B.palette.find((p) => !S.conds.some((c) => c.color === p)) || B.palette[S.conds.length % B.palette.length];
+const BUILD_FIELDS = ["type_tag", "size_in", "gauge", "spacing_in", "board_type", "thickness_in", "layers", "sides", "fire_rating"];
+function inchText(v) {  // 3.625 -> 3-5/8", like the template's |inches
+  let w = Math.floor(v), n = Math.round((v - w) * 16), d = 16;
+  if (n === 16) { w += 1; n = 0; }
+  while (n && n % 2 === 0) { n /= 2; d /= 2; }
+  return !n ? `${w}"` : w ? `${w}-${n}/${d}"` : `${n}/${d}"`;
+}
+function setField(name, value, label) {  // a select gets an option for a value its list doesn't have (a parsed 19.2" o.c.)
+  const el = form.elements[name], v = value == null ? "" : String(value);
+  if (el.tagName === "SELECT" && ![...el.options].some((o) => o.value === v)) {
+    const o = new Option(label || v, v);
+    o.dataset.added = "";
+    el.add(o);
+  }
+  el.value = v;
+}
+function resetForm() {  // back to "New condition": defaults, every field on, no added options
+  S.edit = null;
+  form.reset();
+  form.querySelectorAll("option[data-added]").forEach((o) => o.remove());
+  BUILD_FIELDS.forEach((n) => { form.elements[n].disabled = false; });
+  form.elements.height_ft.required = false;
+  $("#cond-form-title").textContent = "New condition"; $("#cond-save").textContent = "Add condition";
+  $("#cond-form-note").hidden = true; $("#cond-err").textContent = "";
+}
+function openEdit(cid) {
+  const c = cond(cid);
+  if (!c) return;
+  resetForm();
+  const st = c.studs || {}, L = c.layers_each_side || [], first = L[0] || {}, sub = !!c.parent_id;
+  setField("type_tag", c.type_tag); setField("color", c.color); setField("name", c.name || "");
+  setField("size_in", st.size_in ?? 3.625, st.size_in && inchText(st.size_in));
+  setField("gauge", st.gauge ?? "");
+  setField("spacing_in", st.spacing_in ?? "", st.spacing_in && `${st.spacing_in}"`);
+  setField("board_type", first.board_type || "type_x");
+  setField("thickness_in", first.thickness_in ?? 0.625, first.thickness_in && inchText(first.thickness_in));
+  setField("layers", L.length || 1);
+  setField("sides", c.sides === 1 ? 1 : 2);
+  setField("height_ft", c.height_ft ?? "");
+  setField("fire_rating", c.fire_rating ?? "", c.fire_rating && `${c.fire_rating} hr`);
+  const note = $("#cond-form-note"), mixed = L.some((l) => l.board_type !== first.board_type || l.thickness_in !== first.thickness_in);
+  if (sub) {  // a height takes its build from its wall type: only its name, colour and height are its own
+    BUILD_FIELDS.forEach((n) => { form.elements[n].disabled = true; });
+    form.elements.height_ft.required = true;
+    note.textContent = `Its build comes from ${c.type_tag}. Edit ${c.type_tag} to change it.`; note.hidden = false;
+  } else if (mixed) {
+    note.textContent = "These layers are mixed. Changing Board, Thick or Layers makes every layer the same."; note.hidden = false;
+  }
+  S.edit = { cid, before: Object.fromEntries(new FormData(form)) };  // only what changes is sent
+  $("#cond-form-title").textContent = `Edit ${c.type_tag}${sub ? ` @ ${+c.height_ft}'` : ""}`;
+  $("#cond-save").textContent = "Save changes";
+  form.hidden = false;
+  form.scrollIntoView({ block: "nearest" });
+  form.elements[sub ? "name" : "type_tag"].focus();
+}
+async function saveEdit() {
+  const { cid, before } = S.edit, f = new FormData(form), tag = String(f.get("type_tag") ?? cond(cid)?.type_tag ?? "").trim();
+  const changed = (k) => f.has(k) && String(f.get(k)) !== String(before[k] ?? "");
+  const body = {};
+  if (changed("type_tag")) body.type_tag = tag;
+  if (changed("color")) body.color = f.get("color");
+  if (changed("name") && String(f.get("name")).trim()) body.name = String(f.get("name")).trim();  // untouched, an auto name follows the edit
+  if (["size_in", "gauge", "spacing_in"].some(changed)) {
+    body.studs = { size_in: +f.get("size_in"), gauge: f.get("gauge") ? +f.get("gauge") : null, spacing_in: f.get("spacing_in") ? +f.get("spacing_in") : null };
+  }
+  if (["board_type", "thickness_in", "layers"].some(changed)) {
+    body.layers_each_side = Array.from({ length: +f.get("layers") }, () => ({ thickness_in: +f.get("thickness_in"), board_type: f.get("board_type") }));
+  }
+  if (changed("sides")) body.sides = +f.get("sides");
+  if (changed("height_ft")) body.height_ft = f.get("height_ft") ? +f.get("height_ft") : null;
+  if (changed("fire_rating")) body.fire_rating = f.get("fire_rating") ? +f.get("fire_rating") : null;
+  if (!Object.keys(body).length) { resetForm(); form.hidden = true; return; }
+  const btn = $("#cond-save"); btn.disabled = true;
+  const r = await Takeoff.editCondition(cid, body);
+  btn.disabled = false;
+  if (!r.ok) { $("#cond-err").textContent = errText(r, "Couldn't save that."); return; }
+  resetForm(); form.hidden = true;
+  await reloadData(true);
+  toast(`Saved ${tag}`);
+}
 $("#cond-new").addEventListener("click", () => {
-  form.hidden = !form.hidden;
-  if (!form.hidden) { form.elements.color.value = nextColor(); $("#cond-err").textContent = ""; form.elements.type_tag.focus(); }
+  if (!form.hidden && !S.edit) { form.hidden = true; return; }
+  resetForm(); form.hidden = false;
+  form.elements.color.value = nextColor(); form.elements.type_tag.focus();
 });
-$("#cond-cancel").addEventListener("click", () => { form.hidden = true; });
+$("#cond-cancel").addEventListener("click", () => { resetForm(); form.hidden = true; });
 $("#cond-swatches").addEventListener("click", (e) => { const b = e.target.closest("[data-color]"); if (b) form.elements.color.value = b.dataset.color; });
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (S.edit) return saveEdit();
   const f = new FormData(form), tag = String(f.get("type_tag") || "").trim();
   if (!tag) return;
   const body = {
@@ -905,7 +1007,7 @@ form.addEventListener("submit", async (e) => {
   if (!r.ok) { $("#cond-err").textContent = errText(r, "Couldn't add that condition."); return; }
   await reloadData(true);
   const id = (r.data && (r.data.condition_id || r.data.id || Takeoff.idOf(r.data))) || S.conds.find((c) => c.type_tag === tag)?.id;
-  form.reset(); form.hidden = true;
+  resetForm(); form.hidden = true;
   if (id && cond(id)) { setCond(id); toast(`Added ${tag}`); }
 });
 
@@ -938,6 +1040,8 @@ $("#cal-len").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.preventDefault(); $("#cal-cancel").click(); }
 });
 $("#noscale-cal").addEventListener("click", () => setTool("calibrate"));
+$("#meas-done").addEventListener("click", () => { S.cal = null; hideCalPop(); renderCal(); updateHint(); });
+$("#meas-cal").addEventListener("click", measToCalibrate);
 $("#quick-scale").innerHTML += B.scaleLabels.filter((l) => l !== "NTS").map((l) => `<option>${esc(l)}</option>`).join("");
 $("#quick-scale").addEventListener("change", (e) => { if (e.target.value) chooseScale(e.target.value); e.target.value = ""; });
 

@@ -28,6 +28,8 @@
       <button type="button" class="btn-ghost sm" id="cond-new" data-testid="cond-new">+ New condition</button>
     </div>
     <form class="cond-form" id="cond-form" data-testid="cond-form" hidden autocomplete="off">
+      <div class="ftitle" id="cond-form-title" data-testid="cond-form-title">New condition</div>
+      <div class="fnote small" id="cond-form-note" data-testid="cond-form-note" hidden></div>
       <div class="g2">
         <label>Type tag <input name="type_tag" required maxlength="12" placeholder="A3" data-testid="cond-form-tag"></label>
         <label>Colour <input type="color" name="color" value="{{ boot.nextColor }}" data-testid="cond-form-color"></label>
@@ -50,7 +52,7 @@
         <label>Fire <select name="fire_rating"><option value="">None</option><option value="1">1 hr</option><option value="2">2 hr</option><option value="3">3 hr</option></select></label>
       </div>
       <div class="err small" id="cond-err" data-testid="cond-form-error"></div>
-      <div class="row"><button type="button" class="btn-ghost sm" id="cond-cancel" data-testid="cond-form-cancel">Cancel</button><button type="submit" class="sm" data-testid="cond-form-save">Add condition</button></div>
+      <div class="row"><button type="button" class="btn-ghost sm" id="cond-cancel" data-testid="cond-form-cancel">Cancel</button><button type="submit" class="sm" id="cond-save" data-testid="cond-form-save">Add condition</button></div>
     </form>
     <div class="clist" id="clist" data-testid="cond-list"></div>
   </aside>
@@ -64,8 +66,8 @@
       <svg class="ic" viewBox="0 0 24 24"><path d="M5 18l2-11 10 2 3 9z"/></svg>Area <kbd>A</kbd></button>
     <button type="button" class="tool" data-tool="count" data-testid="tool-count" title="Count (C): click each item, Enter to finish">
       <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>Count <kbd>C</kbd></button>
-    <button type="button" class="tool" data-tool="calibrate" data-testid="tool-calibrate" title="Calibrate (K): click two points, then type the real length">
-      <svg class="ic" viewBox="0 0 24 24"><path d="M3 16L16 3l5 5L8 21z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2"/></svg>Calibrate <kbd>K</kbd></button>
+    <button type="button" class="tool" data-tool="measure" data-testid="tool-measure" title="Measure (M): click two points to check a distance at this sheet's scale; calibrate from it if it's wrong">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M3 16L16 3l5 5L8 21z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2"/></svg>Measure <kbd>M</kbd></button>
     <span class="sep"></span>
     <button type="button" class="tool icon" id="btn-fit" data-testid="tool-fit" title="Fit sheet (F)">
       <svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Fit <kbd>F</kbd></button>
@@ -100,6 +102,12 @@
       <div class="err small" id="cal-err"></div>
       <div class="row"><button type="button" class="ghost sm" id="cal-cancel" data-testid="calibrate-cancel">Cancel</button><button type="button" class="sm" id="cal-apply" data-testid="calibrate-apply">Calibrate</button></div>
     </div>
+    <div class="pop" id="meas-pop" data-testid="measure-dialog" hidden>
+      <div class="small muted">Measured</div>
+      <div class="mlen" id="meas-len" data-testid="measure-length"></div>
+      <div class="small muted" id="meas-note"></div>
+      <div class="row"><button type="button" class="ghost sm" id="meas-done" data-testid="measure-done">Done</button><button type="button" class="sm" id="meas-cal" data-testid="measure-calibrate">Calibrate from this</button></div>
+    </div>
     <div class="menu" id="scale-menu" data-testid="scale-menu" hidden></div>
     <div class="vpempty" id="vp-empty" data-testid="takeoff-empty" hidden></div>
   </div>
@@ -124,7 +132,8 @@
   <div class="help" id="help" data-testid="shortcuts" hidden>
     <h3>Shortcuts</h3>
     <dl>
-      <dt><kbd>V</kbd> <kbd>L</kbd> <kbd>A</kbd> <kbd>C</kbd> <kbd>K</kbd></dt><dd>Select, Linear, Area, Count, Calibrate</dd>
+      <dt><kbd>V</kbd> <kbd>L</kbd> <kbd>A</kbd> <kbd>C</kbd> <kbd>M</kbd></dt><dd>Select, Linear, Area, Count, Measure</dd>
+      <dt><kbd>K</kbd></dt><dd>Calibrate on a known dimension</dd>
       <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick the Nth condition</dd>
       <dt>Drag</dt><dd>Draw a wall</dd>
       <dt>Click</dt><dd>Add a point</dd>

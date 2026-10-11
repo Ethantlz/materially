@@ -551,12 +551,15 @@ def test_the_other_tools_keep_their_clicks():
 S.tool = 'calibrate';
 lib.pointerdown(ev(100, 100)); lib.pointerup(ev(100, 100));
 const cal = calls.splice(0);
+S.tool = 'measure';
+lib.pointerdown(ev(100, 100)); lib.pointerup(ev(100, 100));
+const meas = calls.splice(0);
 S.tool = 'area';
 lib.pointerdown(ev(100, 100)); lib.pointermove(ev(200, 100)); lib.pointerup(ev(200, 100));  // a drag with the area tool is not a click, as before
 const areaDrag = { calls: calls.splice(0), draft: S.draft };
-console.log(JSON.stringify({ cal, areaDrag }));
+console.log(JSON.stringify({ cal, meas, areaDrag }));
 """)
-    assert out["cal"] == ["calPoint"] and out["areaDrag"] == {"calls": [], "draft": None}
+    assert out["cal"] == ["calPoint"] and out["meas"] == ["calPoint"] and out["areaDrag"] == {"calls": [], "draft": None}
 
 
 def test_condition_views_pass_materials_through():

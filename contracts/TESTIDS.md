@@ -115,7 +115,12 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - tool-linear | /jobs/{job}/takeoff | Linear tool (L)
 - tool-area | /jobs/{job}/takeoff | Area tool (A)
 - tool-count | /jobs/{job}/takeoff | Count tool (C)
-- tool-calibrate | /jobs/{job}/takeoff | Calibrate tool (K)
+- tool-calibrate | /jobs/{job}/takeoff | Calibrate tool (K); the toolbar button is Measure now, calibrate starts from it, the scale menu or K (retired)
+- tool-measure | /jobs/{job}/takeoff | Measure tool (M): two clicks show the distance at the sheet scale
+- measure-dialog | /jobs/{job}/takeoff | popover with the measured length
+- measure-length | /jobs/{job}/takeoff | the measured length
+- measure-done | /jobs/{job}/takeoff | closes it
+- measure-calibrate | /jobs/{job}/takeoff | calibrates from the same two points
 - tool-fit | /jobs/{job}/takeoff | Fit sheet (F)
 - tool-undo | /jobs/{job}/takeoff | Undo (Ctrl+Z)
 - tool-help | /jobs/{job}/takeoff | shortcuts popover (?)
@@ -142,6 +147,9 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - cond-list | /jobs/{job}/takeoff | list of condition rows
 - cond-row | /jobs/{job}/takeoff | one condition; click makes it active (js)
 - cond-tag | /jobs/{job}/takeoff | type tag on a row (js)
+- cond-edit | /jobs/{job}/takeoff | pencil on a row: opens the condition form to edit it (js)
+- cond-form-title | /jobs/{job}/takeoff | "New condition" or "Edit A1" over the form
+- cond-form-note | /jobs/{job}/takeoff | why some fields are locked (a height) or will change (mixed layers)
 - cond-name | /jobs/{job}/takeoff | name on a row; the full name is now the hover title on cond-tag (retired)
 - cond-swatch | /jobs/{job}/takeoff | the condition's colour swatch on its row (js)
 - cond-lf | /jobs/{job}/takeoff | running linear feet of a condition, includes the shape being drawn (js)

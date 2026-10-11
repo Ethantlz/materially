@@ -121,6 +121,7 @@ window.costBadge = (job) => {
       route("calibrate", "POST", [`/api/sheets/${id}/calibrate`, `/ui/standin/sheets/${id}/calibrate`], { p1, p2, real_ft: realFt }),
     createCondition: (job, body) =>                                                                       // extract
       route("createCondition", "POST", [`/api/jobs/${job}/conditions`, `/ui/standin/jobs/${job}/conditions`], body),
+    editCondition: (cid, body) => route("editCondition", "PATCH", [`/api/conditions/${cid}`], body),       // extract
     scan: (job) => route("scan", "POST", [`/api/jobs/${job}/conditions/scan`]),                           // extract
     addHeight: (cid, h) => route("addHeight", "POST", [`/api/conditions/${cid}/subconditions`], { height_ft: h }), // extract: a wall type at another height
     findProducts: (cid, key) => route("findProducts", "POST", [`/api/conditions/${cid}/materials/${encodeURIComponent(key)}/products`]), // procure

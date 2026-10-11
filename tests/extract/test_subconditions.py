@@ -210,3 +210,49 @@ def test_a_subcondition_is_never_the_rescans_upsert_target(mock_db, synthetic_pd
     assert {k: kept[k] for k in orphan} == orphan, "the child is untouched"
     tops = list(mock_db.conditions.find({"job_id": job, "type_tag": "A1", "parent_id": None}))
     assert len(tops) == 1 and tops[0]["studs"]["size_in"] == 3.625
+
+
+def test_editing_a_wall_types_build_rebuilds_its_materials_and_reaches_its_heights(client, job):
+    parent = a1(client, job)
+    sub = add(client, parent, 12).json()
+    db = get_db()
+    for c in (parent, sub):  # every material already has a product found for it
+        mats = [{**m, "product_id": f"{c['id'][-4:]}-{m['key']}"} for m in c["materials"]]
+        db.conditions.update_one({"_id": ObjectId(c["id"])}, {"$set": {"materials": mats}})
+    before = {m["key"]: m for m in a1(client, job)["materials"]}
+
+    r = client.patch(f"/api/conditions/{parent['id']}", json={"studs": {"size_in": 6}})
+    assert r.status_code == 200, r.text
+    edited = r.json()
+    assert edited["studs"]["size_in"] == 6 and edited["name"].startswith("A1 - 6\"")
+    rows = {m["key"]: m for m in edited["materials"]}
+    assert set(rows) == set(before), "same materials, rebuilt in place"
+    assert rows["stud"]["size_in"] == 6 and rows["stud"]["desc"].startswith('6"') and not rows["stud"].get("product_id")
+    assert rows["track"]["size_in"] == 6 and not rows["track"].get("product_id")
+    boards = [k for k in rows if rows[k]["role"] == "board"]
+    assert boards and all(rows[k]["product_id"] == before[k]["product_id"] for k in boards), "an unchanged board keeps its product"
+    for k, m in rows.items():
+        if m["role"] not in ("stud", "track", "board", "insulation"):
+            assert m == before[k], f"{k} came from the callout text and stays as it was"
+    if "insulation" in rows:
+        assert rows["insulation"]["size_in"] == 6 and not rows["insulation"].get("product_id")
+    assert validate("conditions", {k: v for k, v in db.conditions.find_one({"_id": ObjectId(parent["id"])}).items() if k != "_id"}) == []
+
+    child = next(c for c in listed(client, job) if c["id"] == sub["id"])
+    assert child["studs"]["size_in"] == 6 and child["name"] == f"{edited['name']} @ 12'", "the height follows its wall type"
+    child_rows = {m["key"]: m for m in child["materials"]}
+    assert not child_rows["stud"].get("product_id")
+    assert all(child_rows[k]["product_id"] == f"{sub['id'][-4:]}-{k}" for k in boards), "the height keeps its own products"
+    assert child["color"] == sub["color"] and child["height_ft"] == 12
+
+
+def test_a_height_edits_its_own_name_colour_and_height_but_not_the_build(client, job):
+    parent = a1(client, job)
+    sub = add(client, parent, 12).json()
+
+    r = client.patch(f"/api/conditions/{sub['id']}", json={"studs": {"size_in": 6}})
+    assert r.status_code == 422 and "wall type" in r.json()["detail"]
+    r = client.patch(f"/api/conditions/{sub['id']}", json={"type_tag": "A1", "height_ft": 14, "name": "Tall corridor", "color": "#123456"})
+    assert r.status_code == 200, r.text  # an unchanged build field is fine
+    assert (r.json()["height_ft"], r.json()["name"], r.json()["color"]) == (14, "Tall corridor", "#123456")
+    assert a1(client, job)["studs"] == parent["studs"]
