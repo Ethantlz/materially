@@ -9,11 +9,17 @@ COMMON = (
 
 PROMPTS = {
     "parse_partition": """The input is the text found next to one partition type tag on a partition-types sheet.
-Read it into one wall condition.
-- type_tag: the tag exactly as drawn, for example "A1" or "P-3".
-- studs.size_in: decimal inches (1-5/8 -> 1.625, 2-1/2 -> 2.5, 3-5/8 -> 3.625, 6 -> 6).
-- studs.gauge: an integer gauge (20 GA -> 20, 25 GA -> 25; 20EQ or 30 mil -> 20, 25EQ or 18 mil -> 25, 33 mil -> 20, 43 mil -> 18, 54 mil -> 16).
-- studs.spacing_in: on-center spacing in inches (16" O.C. -> 16).
+It may instead be one column of a partition schedule: the wall family's callouts plus that column's values
+(STUD SIZE, ACTUAL DIMENSION 'X', FIRE RATING, ACOUSTICAL RATING). Read it into one wall condition.
+Never guess a value the text doesn't give; use null.
+- type_tag: the tag exactly as drawn, for example "A1", "P-3" or "SA4".
+- studs.size_in: decimal inches (1-5/8 -> 1.625, 2-1/2 -> 2.5, 3-5/8 -> 3.625, 6 -> 6); null when the stud
+  size says "see UL detail" or isn't given.
+- studs.gauge: an integer gauge (20 GA -> 20, 25 GA -> 25; 20EQ or 30 mil -> 20, 25EQ or 18 mil -> 25, 33 mil -> 20, 43 mil -> 18, 54 mil -> 16);
+  null when the text gives no stud gauge (a 25 GA resilient channel is not the stud gauge).
+- studs.spacing_in: on-center stud spacing in inches (16" O.C. -> 16); null when not given.
+- When an actual wall dimension 'X' is given, use it to check layers and sides: X = stud + board thicknesses
+  (+ 1/2" for a resilient channel). 2-1/2" stud with X 3-1/8" -> one 5/8" layer on one side.
 - layers_each_side: one entry per layer on a finished side, outermost last.
   thickness_in is decimal (5/8 -> 0.625, 1/2 -> 0.5). board_type is one of the allowed values
   (Type X -> type_x, standard or regular -> regular, MR or moisture resistant -> moisture_resistant).

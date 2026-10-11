@@ -117,8 +117,10 @@ VALIDATORS: dict[str, dict] = {
                 "required": ["size_in", "gauge", "spacing_in"],
                 "properties": {
                     "size_in": {"bsonType": "number", "minimum": 1, "maximum": 14},
-                    "gauge": {"enum": GAUGES},
-                    "spacing_in": {"bsonType": "number", "minimum": 4, "maximum": 48},
+                    # gauge / spacing are often only in the specs (09 22 16): present but null when the
+                    # drawing doesn't say. size_in stays non-null, so "SEE UL DET." lands in review_queue.
+                    "gauge": {"enum": GAUGES + [None]},
+                    "spacing_in": {"bsonType": ["number", "null"], "minimum": 4, "maximum": 48},
                 },
             },
             "layers_each_side": {
