@@ -156,3 +156,20 @@ def test_light_tokens_and_no_tab_nav(client):
         assert token in css
     page = client.get(f"/jobs/{JOB_ID}/takeoff").text
     assert 'data-testid="nav-tabs"' not in page and 'data-testid="nav-home"' in page
+
+
+def test_takeoff_js_renders_materials_and_scan():
+    js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
+    for tid in ("cond-materials", "material-row", "material-find", "material-product"):
+        assert f'data-testid="{tid}"' in js
+    assert "Takeoff.scan(" in js
+
+
+def test_condition_views_pass_materials_through():
+    from ui.common import condition_views
+
+    mats = [{"key": "stud_0", "role": "stud", "desc": '3-5/8" 20ga stud @ 16" o.c.', "source": "derived", "product_id": None}]
+    c = {"id": "c1", "type_tag": "A1", "studs": {"size_in": 3.625, "gauge": 20, "spacing_in": 16},
+         "layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}], "materials": mats}
+    assert condition_views([c])[0]["materials"] == mats
+    assert condition_views([{**c, "materials": None}])[0]["materials"] == []

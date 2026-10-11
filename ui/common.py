@@ -91,6 +91,8 @@ def condition_view(c: dict, fallback_index: int = 0) -> dict:
         "name": c.get("name") or condition_name(c),
         "color": c.get("color") or PALETTE[fallback_index % len(PALETTE)],
         "height_ft": c.get("height_ft"), "sides": c.get("sides"), "fire_rating": c.get("fire_rating"),
+        # What the type is built from, so the takeoff can expand a condition into its studs, track, board …
+        "materials": c.get("materials") or [],
         "source": {"sheet": src.get("sheet"), "page": src.get("page"), "bbox": src.get("bbox")} if src else None,
     }
 
