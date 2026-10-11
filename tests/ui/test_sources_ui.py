@@ -30,7 +30,7 @@ def client(mock_db, monkeypatch):
     """The same seeding as tests/ui/test_pages.py's client fixture (the takeoff page needs its job and sheets)."""
     monkeypatch.setenv("DB_NAME", mock_db.name)
     for name, doc in SAMPLES.items():
-        if name not in ("price_book", "model_policy"):  # mock_db is already seeded with these
+        if name not in ("price_book", "model_policy", "product_sources"):  # seeded already / each test picks its own
             mock_db[name].insert_one(deepcopy(doc))
     return TestClient(app)
 

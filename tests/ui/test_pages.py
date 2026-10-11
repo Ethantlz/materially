@@ -8,6 +8,7 @@ import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
 
+from app.db import get_db
 from app.main import app
 from contracts.samples import CONDITION_ID, DRAFT_ID, JOB_ID, ORDER_ID, SAMPLES, SHEET_PT_ID
 from ui.api import inches
@@ -55,7 +56,13 @@ def _pages(client) -> dict[str, list[str]]:
             url = pattern.format(**{k: str(v) for k, v in vals.items()})
             if pattern == "/review" and state == "empty":
                 url += f"?job_id={EMPTY_JOB}"
+            saved = []
+            if pattern == "/ui/panel/sources" and state == "empty":  # a company-wide page: empty = no supplier listed
+                saved = list(get_db().product_sources.find())
+                get_db().product_sources.delete_many({})
             r = client.get(url)
+            if saved:
+                get_db().product_sources.insert_many(saved)
             assert r.status_code == 200, (url, r.text[:300])
             htmls.append(r.text)
         out[pattern] = htmls
