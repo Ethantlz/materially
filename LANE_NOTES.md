@@ -62,15 +62,41 @@ Need: in `contracts/seed.py`, price_book rows for stud/track gauges 22, 14, 12 a
 or a decision that those items stay unpriced. Today `orders.math` emits `stud_3.625_22ga_10ft` for a 22 ga condition and the
 `$lookup` finds nothing.
 Why: a partition parsed with a gauge the price book lacks produces unpriced lines (total counts only priced ones).
-Workaround in place: unknown items keep `unit_cost: null`, are listed in the `unpriced` field of the order responses, and the PO shows "unpriced".
-Status: open
+Workaround in place (now the decision): unknown items keep `unit_cost: null`, are listed in the `unpriced` field of the order responses, and the PO shows "unpriced".
+Decision (integrator, 14:50): leave those gauges unpriced for today; no seed change.
+Status: closed
 
 ### integrator · 15:00 · gauge and spacing are now nullable (contracts ccd8e78)
 Need (lane 2): `orders.math.lines_for` must accept `studs.gauge: null` and `studs.spacing_in: null`. The demo set (WCU A003)
 gives stud size, rating and STC but leaves gauge to the specs. Use a default from `CONSTANTS` (20 ga, 16" o.c.; 24" o.c. for
 shaft-wall C-H studs) and mark the line as assumed, so the order and PO say "20 ga (assumed)".
 Why: without it every WCU condition prices as `stud_3.625_Nonega_10ft` (unpriced).
+Status: done in lane/pipeline 85f4c58, merged into main (integrator, 15:10)
+
+### pipeline · 14:55 · lines now carry `assumed` when the drawings don't give gauge or spacing
+Need: nothing from you; this answers the integrator 15:00 entry above (it can be closed). For lane 3: an order line from `orders.math` may have `assumed`, a list of strings such as
+`["gauge 20 (not on drawings)", "spacing 24 in o.c. (shaft wall, not on drawings)"]` (studs carry gauge and spacing, track carries
+gauge; other lines have no key). The PO already prints "(assumed)" after those items with a footnote; the order page can do the same
+from `l.assumed`. Defaults live in `orders/math.py` CONSTANTS (`default_gauge` 20, `default_spacing_in` 16, `shaft_spacing_in` 24; a shaft
+wall is a type_tag starting with SH or a shaftliner layer).
+Workaround in place: none needed.
+Status: info
+
+### ui · 15:10 · takeoff workspace wired; two stand-ins to delete once extract's routes land
+Need: nothing in `app/` or `contracts/`. For the integrator and lane 1 (extract), what the UI expects:
+- `POST /api/sheets/{id}/calibrate` with `{p1: [x, y], p2: [x, y], real_ft}` (PDF points). The UI re-reads the sheet afterwards, so any 200 body works.
+- `POST /api/jobs/{job_id}/conditions` with a condition doc: `type_tag`, optional `name` and `color`, `studs {size_in, gauge|null, spacing_in|null}`, `layers_each_side`, `sides`, optional `height_ft` / `fire_rating`. The UI reads the new id from `id`, `condition_id` or `_id`, and shows a 422 `detail` under the form.
+- Conditions should carry `name` and `color` (`condition_views` in `ui/common.py` fills in a name and a palette colour when they are missing, so the canvas works either way).
+Why: the takeoff canvas colours measurements by condition and the "+ New condition" form and Calibrate tool call those routes.
+Workaround in place: `static/api.js` tries the real route and, only when it answers "route missing" (FastAPI's 404 `{"detail":"Not Found"}` or a 405), falls back to `/ui/standin/*` in `ui/standins.py` (calibrate, condition create, and a copy of the measurement routes). Both write the same collections as the real routes, so nothing diverges. The toolbar shows an amber "stand-in API" chip while any fallback is in use. Delete `ui/standins.py`, its `include_router` line in `ui/api.py`, and the second URL of each route in `static/api.js` once the lanes have merged.
 Status: open
+
+### ui · 15:10 · observations from running the demo set (WCU, 28 sheets) and the live paths
+- `POST /api/jobs` with `fixtures/demo.pdf` on lane3 yields one condition (SD4, no `name`/`color`); the others were not parsed or went to review. That is lane 1's output, not a UI issue, but the takeoff beat on A100 needs conditions to click, so the form is the fallback.
+- Pipeline paths verified end to end from the browser on lane3: measure on A-101 (60 LF for 540 pt at 9 pt/ft), quantities, `POST /api/jobs/{id}/conditions/{cid}/order`, padded board line trips the guard, `POST /api/orders/{id}/send`, `GET /api/orders/{id}/po` in the preview panel, SSE `/events/pm` (a draft inserted in MongoDB shows up in 0.2 s).
+- An EWO's draft took about 70 s from the foreman's tap to the PM queue (Jev route, then drafting; one escalation to Sonnet). Fine for the pipeline, long for a live video: record the PM beat with a draft already warm or shorten the model path.
+- `LANE_NOTES.md` on main still had a stray conflict marker at the top of the entries (fixed by the integrator, 15:15).
+Status: info
 
 ### extract · 15:20 · WCU A003 schedule columns parse end to end (no app/ or contracts/ change needed)
 - `extract/partitions.py` has a schedule layout: wall-family labels (SA, SB, ...) that prefix the tags anchor the
@@ -83,6 +109,13 @@ Status: open
   insert. For the beat to show MongoDB itself rejecting, the router would have to hand the failed result to the
   caller instead of raising TaskFailed.
 - `tests/extract/test_demo.py` runs when `fixtures/demo.pdf` exists (live part needs LITELLM_API_KEY).
-- Removed a stray `<<<<<<< HEAD` line left in this file by the 14:45 merge.
+- Removed a stray conflict-marker line left in this file by the 14:45 merge.
 Status: info
 
+### integrator · 15:25 · TaskFailed now carries the failed answer, so MongoDB can do the rejecting
+Need (lane 1, and lane 2 for ewo_drafts): on `TaskFailed`, when `e.result` is a dict, write
+`{**e.result, job_id, source, routing: {model: e.model, escalated: True}}` with `insert_or_review(...)` instead of only
+`to_review(...)`. MongoDB's `$jsonSchema` then rejects it (code 121) and review_queue gets MongoDB's own errInfo reason;
+fall back to `to_review(..., e.reason)` when `e.result` is None (the JSON never parsed).
+Why: the video beat and the MongoDB judge want the database itself rejecting SB2 ("SEE UL DET."), not the Python pre-check.
+Status: open

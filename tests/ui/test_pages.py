@@ -9,7 +9,7 @@ from bson import ObjectId
 from fastapi.testclient import TestClient
 
 from app.main import app
-from contracts.samples import CONDITION_ID, DRAFT_ID, JOB_ID, ORDER_ID, SAMPLES
+from contracts.samples import CONDITION_ID, DRAFT_ID, JOB_ID, ORDER_ID, SAMPLES, SHEET_PT_ID
 from ui.api import inches
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +28,15 @@ def client(mock_db, monkeypatch):
     mock_db.orders.update_one({"_id": ORDER_ID}, {"$set": {"guard": {"over": True, "items_over": ["board_0.625_type_x_4x10"]}}})
     sent = deepcopy(SAMPLES["orders"]) | {"_id": SENT_ORDER, "sent_at": SAMPLES["jobs"]["created_at"], "guard": {"over": False, "items_over": []}}
     mock_db.orders.insert_one(sent)
+    mock_db.review_queue.insert_one({
+        "source": "extract.partition", "collection": "conditions", "at": SAMPLES["jobs"]["created_at"],
+        "doc": {"job_id": str(JOB_ID), "type_tag": "B4", "studs": {"size_in": 3.625, "gauge": 19, "spacing_in": 16}},
+        "reason": "Document failed validation: {'details': [{'propertyName': 'gauge', 'reason': 'value was not found in enum', 'consideredValue': 19}]}",
+    })
+    mock_db.review_queue.insert_one({  # a parse that failed before any write has no `collection`
+        "source": "extract.partition", "at": SAMPLES["jobs"]["created_at"], "reason": "studs.size_in: expected number, got NoneType None",
+        "doc": {"job_id": str(JOB_ID), "sheet": str(SHEET_PT_ID), "type_tag": "SB2"},
+    })
     mock_db.jobs.insert_one({"_id": EMPTY_JOB, "name": "Empty", "status": "ready", "created_at": SAMPLES["jobs"]["created_at"]})
     return TestClient(app)
 
@@ -57,7 +66,8 @@ def _testid_lines() -> list[str]:
 
 def test_every_screen_renders(client):
     for url in (f"/jobs/{JOB_ID}/conditions", f"/conditions/{CONDITION_ID}", f"/jobs/{JOB_ID}/orders",
-                f"/orders/{ORDER_ID}", f"/jobs/{JOB_ID}/ewo", f"/jobs/{JOB_ID}/pm", "/review", f"/jobs/{JOB_ID}"):
+                f"/orders/{ORDER_ID}", f"/jobs/{JOB_ID}/ewo", f"/jobs/{JOB_ID}/pm", "/review", f"/jobs/{JOB_ID}", f"/jobs/{JOB_ID}/takeoff",
+                f"/jobs/{EMPTY_JOB}/takeoff", "/"):
         r = client.get(url)
         assert r.status_code == 200, url
 
@@ -69,11 +79,17 @@ def test_every_testid_exists_on_its_page(client):
     for line in _testid_lines():
         testid, page, what = (part.strip() for part in line.split("|"))
         found = any(f'data-testid="{testid}"' in page_html for page_html in pages[page])
-        if "(js)" in what:
-            found = found or re.search(rf'testid\s*=\s*"{re.escape(testid)}"|data-testid="{re.escape(testid)}"', js)
+        if "(js)" in what:  # data-testid="x" in a template string, el.dataset.testid = "x", or {"data-testid": "x"}
+            found = found or re.search(r"""testid["']?\s*[:=]\s*["']""" + re.escape(testid) + r"""["']""", js)
         if not found:
             missing.append(f"{testid} on {page}")
     assert not missing, missing
+
+
+def test_conditions_page_lists_both_kinds_of_rejected_parse(client):
+    html = client.get(f"/jobs/{JOB_ID}/conditions").text
+    assert html.count('data-testid="condition-rejected"') == 2
+    assert "SB2" in html and "gauge: 19 not allowed" in html and "expected number" in html
 
 
 def test_pages_show_the_key_numbers(client):
@@ -83,7 +99,9 @@ def test_pages_show_the_key_numbers(client):
     assert '3-5/8"' in cond and "Type X" in cond and "U419" in cond
     pm = client.get(f"/jobs/{JOB_ID}/pm").text
     assert "$625.55" in pm and "escalated" in pm
-    assert client.get(f"/ui/jobs/{JOB_ID}/cost").json() == {"calls": 1, "cost_usd": 0.00023}
+    cost = client.get(f"/ui/jobs/{JOB_ID}/cost").json()
+    assert cost["calls"] == 1 and cost["cost_usd"] == 0.00023
+    assert cost["by_task"] == [{"task": "parse_partition", "model": "deepseek-ai/DeepSeek-V4.1-Flash", "calls": 1, "cost_usd": 0.00023}]
     assert client.get(f"/ui/jobs/{JOB_ID}/drafts").json() == [str(DRAFT_ID)]
     assert client.get(f"/ui/drafts/{DRAFT_ID}/card").status_code == 200
 

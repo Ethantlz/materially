@@ -108,3 +108,57 @@ def test_a_condition_without_studs_or_layers_is_a_clear_error():
         lines_for({"type_tag": "X"}, 100, 10)
     with pytest.raises(ValueError, match="layers"):
         lines_for({**A1, "layers_each_side": []}, 100, 10)
+
+
+# --- walls whose gauge and spacing aren't on the drawings (WCU H.F. Robinson) -------------------------------------
+
+SA4 = {  # a WCU-like type: stud size, rating and STC from the schedule; no gauge
+    "type_tag": "SA4", "studs": {"size_in": 3.625, "gauge": None, "spacing_in": 16},
+    "layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}], "sides": 2, "insulation": None,
+}
+SH4 = {  # a shaft wall: board on one side only, neither gauge nor spacing given
+    "type_tag": "SH4", "studs": {"size_in": 4, "gauge": None, "spacing_in": None},
+    "layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}], "sides": 1, "insulation": None,
+}
+
+
+def test_a_missing_gauge_uses_the_default_and_marks_the_lines_it_sizes():
+    items = by_item(lines_for(SA4, 100, 10))
+
+    stud, track = items["stud_3.625_20ga_10ft"], items["track_3.625_20ga_10ft"]  # default gauge 20
+    assert stud["computed_qty"] == 76 and stud["assumed"] == ["gauge 20 (not on drawings)"]  # spacing 16 was given
+    assert track["assumed"] == ["gauge 20 (not on drawings)"]
+    assert not any("assumed" in l for k, l in items.items() if not k.startswith(("stud_", "track_")))
+    assert [l["qty"] for l in lines_for(SA4, 100, 10)] == [l["qty"] for l in lines_for(A1 | {"insulation": None}, 100, 10)]  # same walls, same math
+
+
+def test_nothing_is_marked_when_the_drawings_give_gauge_and_spacing():
+    assert not any("assumed" in l for l in lines_for(A1, 100, 10))
+    assert not any("assumed" in l for l in lines_for({**SA4, "studs": {"size_in": 3.625, "gauge": 25, "spacing_in": 24}}, 100, 10))
+
+
+def test_a_shaft_wall_without_spacing_is_framed_at_24():
+    items = by_item(lines_for(SH4, 100, 10))
+
+    stud = items["stud_4_20ga_10ft"]
+    assert stud["computed_qty"] == 51  # ceil(1200 / 24) + 1
+    assert stud["assumed"] == ["gauge 20 (not on drawings)", "spacing 24 in o.c. (shaft wall, not on drawings)"]
+    assert items["track_4_20ga_10ft"]["assumed"] == ["gauge 20 (not on drawings)"]
+    assert items["board_0.625_type_x_4x10"]["computed_qty"] == 25  # sides 1: half the board of a two-sided wall
+
+
+def test_shaft_walls_are_recognised_by_tag_or_by_shaftliner():
+    liner = {"thickness_in": 1.0, "board_type": "shaftliner"}
+    assert by_item(lines_for({**SH4, "type_tag": "SH7"}, 100, 10))["stud_4_20ga_10ft"]["computed_qty"] == 51
+    assert by_item(lines_for({**SH4, "type_tag": "sh2"}, 100, 10))["stud_4_20ga_10ft"]["computed_qty"] == 51
+    by_liner = by_item(lines_for({**SH4, "type_tag": "X9", "layers_each_side": [liner]}, 100, 10))
+    assert by_liner["stud_4_20ga_10ft"]["computed_qty"] == 51
+    plain = by_item(lines_for({**SH4, "type_tag": "SA9"}, 100, 10))["stud_4_20ga_10ft"]  # an ordinary wall with no spacing: 16
+    assert plain["computed_qty"] == 76 and plain["assumed"][1] == "spacing 16 in o.c. (not on drawings)"
+
+
+def test_the_assumed_defaults_are_constants(monkeypatch):
+    monkeypatch.setitem(order_math.CONSTANTS, "default_gauge", 25)
+    monkeypatch.setitem(order_math.CONSTANTS, "shaft_spacing_in", 32)
+    stud = by_item(lines_for(SH4, 100, 10))["stud_4_25ga_10ft"]
+    assert stud["computed_qty"] == 39 and stud["assumed"][0] == "gauge 25 (not on drawings)"  # ceil(1200 / 32) + 1

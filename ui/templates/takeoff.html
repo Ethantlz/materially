@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Takeoff · {{ job.name }}{% endblock %}
+{% block bodyclass %}app{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/takeoff.css">{% endblock %}
+{% block body %}
+<div class="tk" id="tk" data-testid="takeoff">
+
+  <aside class="rail" id="rail" data-testid="sheet-rail" aria-label="Sheets"></aside>
+
+  <section class="center">
+    <div class="toolbar" data-testid="takeoff-toolbar" role="toolbar" aria-label="Takeoff tools">
+      <button type="button" class="tool on" data-tool="select" data-testid="tool-select" title="Select (V): click a measurement, Delete removes it">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M5 3l13 7-6 2-2 6z"/></svg>Select <kbd>V</kbd></button>
+      <button type="button" class="tool" data-tool="linear" data-testid="tool-linear" title="Linear (L): click along a wall, double-click or Enter to finish">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M4 19L10 8l5 7 5-10"/><circle cx="4" cy="19" r="1.4"/><circle cx="20" cy="5" r="1.4"/></svg>Linear <kbd>L</kbd></button>
+      <button type="button" class="tool" data-tool="area" data-testid="tool-area" title="Area (A): click the corners, double-click or Enter to finish">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M5 18l2-11 10 2 3 9z"/></svg>Area <kbd>A</kbd></button>
+      <button type="button" class="tool" data-tool="count" data-testid="tool-count" title="Count (C): click each item, Enter to finish">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>Count <kbd>C</kbd></button>
+      <button type="button" class="tool" data-tool="calibrate" data-testid="tool-calibrate" title="Calibrate (K): click two points, then type the real length">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M3 16L16 3l5 5L8 21z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2"/></svg>Calibrate <kbd>K</kbd></button>
+      <span class="sep"></span>
+      <button type="button" class="tool icon" id="btn-fit" data-testid="tool-fit" title="Fit sheet (F)">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Fit <kbd>F</kbd></button>
+      <button type="button" class="tool icon" id="btn-undo" data-testid="tool-undo" title="Undo (Ctrl+Z)">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M8 7L4 11l4 4"/><path d="M4 11h9a6 6 0 010 12"/></svg>Undo <kbd>Ctrl Z</kbd></button>
+      <span class="grow"></span>
+      <span class="chip" id="mode-chip" data-testid="standin-chip" hidden></span>
+      <button type="button" class="chip" id="scale-chip" data-testid="canvas-scale" title="Sheet scale: click to change"></button>
+      <span class="zoomlabel" id="zoom-label" data-testid="canvas-zoom">100%</span>
+      <button type="button" class="tool icon" id="btn-help" data-testid="tool-help" title="Shortcuts (?)">?</button>
+    </div>
+
+    <div class="viewport" id="viewport" data-testid="takeoff-canvas" data-tool="select" tabindex="-1">
+      <div class="stage" id="stage">
+        <img id="sheet-img" alt="" draggable="false">
+        <svg id="overlay" xmlns="http://www.w3.org/2000/svg" data-testid="canvas-overlay">
+          <g id="g-existing"></g><g id="g-focus"></g><g id="g-cal" class="cal"></g><g id="g-draft" class="draft"></g>
+        </svg>
+      </div>
+      <div class="hint" id="hint" data-testid="canvas-hint"></div>
+      <div class="readout" id="readout" data-testid="live-readout" hidden></div>
+      <div class="banner" id="noscale" data-testid="calibrate-prompt" hidden>
+        <span><b>No scale on this sheet.</b> Pick one or calibrate on a known dimension.</span>
+        <select id="quick-scale" data-testid="scale-quick"><option value="">Scale…</option></select>
+        <button type="button" class="sm" id="noscale-cal" data-testid="calibrate-start">Calibrate <kbd>K</kbd></button>
+      </div>
+      <div class="pop" id="cal-pop" data-testid="calibrate-dialog" hidden>
+        <div class="small muted">Distance on the drawing: <b id="cal-dist" style="color:var(--ink)"></b></div>
+        <label>Real length
+          <input id="cal-len" data-testid="calibrate-length" placeholder="e.g. 24'-6&quot;" autocomplete="off">
+        </label>
+        <div class="err small" id="cal-err"></div>
+        <div class="row"><button type="button" class="ghost sm" id="cal-cancel" data-testid="calibrate-cancel">Cancel</button><button type="button" class="sm" id="cal-apply" data-testid="calibrate-apply">Calibrate</button></div>
+      </div>
+      <div class="menu" id="scale-menu" data-testid="scale-menu" hidden></div>
+      <div class="vpempty" id="vp-empty" data-testid="takeoff-empty" hidden></div>
+    </div>
+    <div class="help" id="help" data-testid="shortcuts" hidden>
+      <h3>Shortcuts</h3>
+      <dl>
+        <dt><kbd>V</kbd> <kbd>L</kbd> <kbd>A</kbd> <kbd>C</kbd> <kbd>K</kbd></dt><dd>Select, Linear, Area, Count, Calibrate</dd>
+        <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick the Nth condition</dd>
+        <dt>Click</dt><dd>Add a point</dd>
+        <dt>Double-click · <kbd>Enter</kbd></dt><dd>Finish and save</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Finish, or cancel if too short</dd>
+        <dt>Right-click</dt><dd>Cancel the shape</dd>
+        <dt><kbd>Shift</kbd></dt><dd>Hold for 45° snap</dd>
+        <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo the last point or measurement</dd>
+        <dt><kbd>Del</kbd></dt><dd>Delete the selected measurement</dd>
+        <dt>Scroll</dt><dd>Zoom at the cursor</dd>
+        <dt><kbd>Space</kbd>-drag · middle-drag</dt><dd>Pan</dd>
+        <dt><kbd>F</kbd> · <kbd>Q</kbd></dt><dd>Fit sheet · quantities drawer</dd>
+      </dl>
+    </div>
+
+    <div class="drawer" id="drawer" data-testid="qty-drawer">
+      <div class="dhead">
+        <button type="button" class="dtoggle" id="qty-toggle" data-testid="qty-toggle" aria-expanded="true" title="Show or hide the quantities (Q)">
+          <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          Quantities <span class="sum" id="qty-sum" data-testid="qty-summary"></span>
+        </button>
+        <a href="/jobs/{{ job.id }}/orders">Orders →</a>
+      </div>
+      <div class="dbody">
+        <table class="tbl" data-testid="qty-table" id="qty-table">
+          <thead><tr><th>Condition</th><th class="num">LF</th><th class="num">SF</th><th class="num">EA</th><th class="num">Measurements</th><th></th></tr></thead>
+          <tbody id="qty-body"></tbody>
+        </table>
+        <div class="qempty" id="qty-empty" data-testid="qty-empty" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" data-testid="cond-panel" aria-label="Conditions">
+    <div class="phead"><h2>Conditions</h2><button type="button" class="ghost sm" id="cond-new" data-testid="cond-new">+ New condition</button></div>
+    <form class="cond-form" id="cond-form" data-testid="cond-form" hidden autocomplete="off">
+      <div class="g2">
+        <label>Type tag <input name="type_tag" required maxlength="12" placeholder="A3" data-testid="cond-form-tag"></label>
+        <label>Colour <input type="color" name="color" value="{{ boot.nextColor }}" data-testid="cond-form-color"></label>
+      </div>
+      <div class="swatches" id="cond-swatches">{% for p in boot.palette %}<button type="button" style="background:{{ p }}" data-color="{{ p }}" aria-label="Colour {{ p }}"></button>{% endfor %}</div>
+      <label>Name <input name="name" placeholder="optional, e.g. Corridor wall" data-testid="cond-form-name"></label>
+      <div class="g3">
+        <label>Stud <select name="size_in">{% for v in (1.625, 2.5, 3.625, 4, 6, 8) %}<option value="{{ v }}" {{ "selected" if v == 3.625 }}>{{ v | inches }}</option>{% endfor %}</select></label>
+        <label>Gauge <select name="gauge"><option value="">Per specs</option>{% for g in boot.gauges %}<option {{ "selected" if g == 20 }}>{{ g }}</option>{% endfor %}</select></label>
+        <label>O.C. <select name="spacing_in"><option value="">Per specs</option>{% for v in (12, 16, 24) %}<option value="{{ v }}" {{ "selected" if v == 16 }}>{{ v }}"</option>{% endfor %}</select></label>
+      </div>
+      <div class="g3">
+        <label>Board <select name="board_type">{% for k, label in boot.boards.items() %}<option value="{{ k }}" {{ "selected" if k == "type_x" }}>{{ label }}</option>{% endfor %}</select></label>
+        <label>Thick <select name="thickness_in">{% for v in (0.375, 0.5, 0.625, 0.75, 1) %}<option value="{{ v }}" {{ "selected" if v == 0.625 }}>{{ v | inches }}</option>{% endfor %}</select></label>
+        <label>Layers <select name="layers"><option>1</option><option>2</option><option>3</option></select></label>
+      </div>
+      <div class="g3">
+        <label>Sides <select name="sides"><option value="2">Both</option><option value="1">One</option></select></label>
+        <label>Height ft <input name="height_ft" type="number" min="1" max="60" step="any" placeholder="10"></label>
+        <label>Fire <select name="fire_rating"><option value="">None</option><option value="1">1 hr</option><option value="2">2 hr</option><option value="3">3 hr</option></select></label>
+      </div>
+      <div class="err small" id="cond-err" data-testid="cond-form-error"></div>
+      <div class="row"><button type="button" class="ghost sm" id="cond-cancel" data-testid="cond-form-cancel">Cancel</button><button type="submit" class="sm" data-testid="cond-form-save">Add condition</button></div>
+    </form>
+    <div class="clist" id="clist" data-testid="cond-list"></div>
+  </aside>
+</div>
+<script>window.TAKEOFF = {{ boot | tojson }};</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/lib.js"></script>
+<script src="/static/takeoff.js"></script>
+{% endblock %}

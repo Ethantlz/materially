@@ -89,3 +89,81 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - review-reason | /review | why it's here
 - review-empty | /review | shown when the queue is empty
 - toast | /jobs/{job} | transient message (js)
+
+## Rework: takeoff workspace, dark chrome, PO preview (lane 3)
+- tab-takeoff | /jobs/{job} | Takeoff tab
+- cost-detail | /jobs/{job} | per-task cost breakdown, opens when the cost badge is clicked
+- sheet-group | /jobs/{job} | one discipline group of sheets (js)
+- sheet-open | /jobs/{job} | "Open in takeoff" link on a sheet card (js)
+- conditions-rejected | /jobs/{job}/conditions | banner listing parses rejected into review (only when there are some)
+- condition-rejected | /jobs/{job}/conditions | one rejected parse with its reason
+- condition-swatch | /jobs/{job}/conditions | condition colour swatch
+- condition-name | /jobs/{job}/conditions | condition name
+- condition-source-link | /jobs/{job}/conditions | jumps to the partition sheet in the takeoff with the box highlighted
+- po-preview | /orders/{order} | PO preview panel (GET /api/orders/{id}/po)
+- po-preview-empty | /orders/{order} | shown when the PO preview endpoint isn't available
+- takeoff | /jobs/{job}/takeoff | the workspace
+- sheet-rail | /jobs/{job}/takeoff | left rail: sheets grouped by discipline
+- rail-empty | /jobs/{job}/takeoff | rail text when the job has no sheets (js)
+- rail-group | /jobs/{job}/takeoff | discipline heading in the rail (js)
+- rail-sheet | /jobs/{job}/takeoff | one sheet in the rail; click opens it on the canvas (js)
+- rail-sheet-no | /jobs/{job}/takeoff | sheet number in the rail (js)
+- sheet-scale-chip | /jobs/{job}/takeoff | scale chip on a rail sheet; amber when there is no scale (js)
+- takeoff-toolbar | /jobs/{job}/takeoff | toolbar
+- tool-select | /jobs/{job}/takeoff | Select tool (V)
+- tool-linear | /jobs/{job}/takeoff | Linear tool (L)
+- tool-area | /jobs/{job}/takeoff | Area tool (A)
+- tool-count | /jobs/{job}/takeoff | Count tool (C)
+- tool-calibrate | /jobs/{job}/takeoff | Calibrate tool (K)
+- tool-fit | /jobs/{job}/takeoff | Fit sheet (F)
+- tool-undo | /jobs/{job}/takeoff | Undo (Ctrl+Z)
+- tool-help | /jobs/{job}/takeoff | shortcuts popover (?)
+- shortcuts | /jobs/{job}/takeoff | shortcuts popover
+- standin-chip | /jobs/{job}/takeoff | "stand-in API" badge; visible only while a takeoff route is answered by ui/standins.py
+- canvas-scale | /jobs/{job}/takeoff | scale chip of the open sheet; click to change it
+- canvas-zoom | /jobs/{job}/takeoff | zoom percentage
+- scale-menu | /jobs/{job}/takeoff | scale picker menu
+- takeoff-canvas | /jobs/{job}/takeoff | the drawing viewport (click here to measure)
+- canvas-overlay | /jobs/{job}/takeoff | SVG overlay in the transformed stage
+- canvas-hint | /jobs/{job}/takeoff | context hint and live total while drawing
+- live-readout | /jobs/{job}/takeoff | feet-and-inches readout that follows the cursor while drawing
+- measurement | /jobs/{job}/takeoff | one drawn measurement, in its condition's colour (js)
+- source-box | /jobs/{job}/takeoff | highlighted box of a condition's source on the partition sheet (js)
+- takeoff-empty | /jobs/{job}/takeoff | canvas message when there is no sheet or it is still rendering
+- calibrate-prompt | /jobs/{job}/takeoff | banner shown when the open sheet has no scale
+- scale-quick | /jobs/{job}/takeoff | scale dropdown in that banner
+- calibrate-start | /jobs/{job}/takeoff | Calibrate button in that banner
+- calibrate-dialog | /jobs/{job}/takeoff | popover that asks for the real length after two clicks
+- calibrate-length | /jobs/{job}/takeoff | real length input (24'-6" or 24.5)
+- calibrate-apply | /jobs/{job}/takeoff | applies the calibration
+- calibrate-cancel | /jobs/{job}/takeoff | cancels it
+- cond-panel | /jobs/{job}/takeoff | right panel: conditions
+- cond-list | /jobs/{job}/takeoff | list of condition rows
+- cond-row | /jobs/{job}/takeoff | one condition; click makes it active (js)
+- cond-tag | /jobs/{job}/takeoff | type tag on a row (js)
+- cond-name | /jobs/{job}/takeoff | name on a row (js)
+- cond-swatch | /jobs/{job}/takeoff | the condition's colour swatch on its row (js)
+- cond-lf | /jobs/{job}/takeoff | running linear feet of a condition, includes the shape being drawn (js)
+- cond-sf | /jobs/{job}/takeoff | running square feet (js)
+- cond-ea | /jobs/{job}/takeoff | running count (js)
+- cond-active | /jobs/{job}/takeoff | marker inside the active condition's row (js)
+- cond-source | /jobs/{job}/takeoff | jumps to the condition's partition sheet with its box highlighted (js)
+- cond-empty | /jobs/{job}/takeoff | panel text when there are no conditions (js)
+- cond-new | /jobs/{job}/takeoff | "+ New condition" button
+- cond-form | /jobs/{job}/takeoff | new-condition form
+- cond-form-tag | /jobs/{job}/takeoff | type tag input
+- cond-form-name | /jobs/{job}/takeoff | name input
+- cond-form-color | /jobs/{job}/takeoff | colour input
+- cond-form-save | /jobs/{job}/takeoff | adds the condition
+- cond-form-cancel | /jobs/{job}/takeoff | closes the form
+- cond-form-error | /jobs/{job}/takeoff | error text, e.g. MongoDB's validator rejection
+- qty-drawer | /jobs/{job}/takeoff | bottom drawer: quantities
+- qty-toggle | /jobs/{job}/takeoff | opens and closes the drawer (Q)
+- qty-summary | /jobs/{job}/takeoff | one-line totals in the drawer header
+- qty-table | /jobs/{job}/takeoff | quantities table
+- qty-empty | /jobs/{job}/takeoff | drawer text before anything is measured
+- qty-row | /jobs/{job}/takeoff | one measured condition (js)
+- qty-lf | /jobs/{job}/takeoff | linear feet cell (js)
+- qty-sf | /jobs/{job}/takeoff | square feet cell (js)
+- qty-ea | /jobs/{job}/takeoff | count cell (js)
+- qty-create-order | /jobs/{job}/takeoff | builds a priced order from the row's linear feet and opens it (js)
