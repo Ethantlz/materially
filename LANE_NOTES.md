@@ -72,3 +72,19 @@ gives stud size, rating and STC but leaves gauge to the specs. Use a default fro
 shaft-wall C-H studs) and mark the line as assumed, so the order and PO say "20 ga (assumed)".
 Why: without it every WCU condition prices as `stud_3.625_Nonega_10ft` (unpriced).
 Status: open
+
+### ui · 15:10 · takeoff workspace wired; two stand-ins to delete once extract's routes land
+Need: nothing in `app/` or `contracts/`. For the integrator and lane 1 (extract), what the UI expects:
+- `POST /api/sheets/{id}/calibrate` with `{p1: [x, y], p2: [x, y], real_ft}` (PDF points). The UI re-reads the sheet afterwards, so any 200 body works.
+- `POST /api/jobs/{job_id}/conditions` with a condition doc: `type_tag`, optional `name` and `color`, `studs {size_in, gauge|null, spacing_in|null}`, `layers_each_side`, `sides`, optional `height_ft` / `fire_rating`. The UI reads the new id from `id`, `condition_id` or `_id`, and shows a 422 `detail` under the form.
+- Conditions should carry `name` and `color` (`condition_views` in `ui/common.py` fills in a name and a palette colour when they are missing, so the canvas works either way).
+Why: the takeoff canvas colours measurements by condition and the "+ New condition" form and Calibrate tool call those routes.
+Workaround in place: `static/api.js` tries the real route and, only when it answers "route missing" (FastAPI's 404 `{"detail":"Not Found"}` or a 405), falls back to `/ui/standin/*` in `ui/standins.py` (calibrate, condition create, and a copy of the measurement routes). Both write the same collections as the real routes, so nothing diverges. The toolbar shows an amber "stand-in API" chip while any fallback is in use. Delete `ui/standins.py`, its `include_router` line in `ui/api.py`, and the second URL of each route in `static/api.js` once the lanes have merged.
+Status: open
+
+### ui · 15:10 · observations from running the demo set (WCU, 28 sheets) and the live paths
+- `POST /api/jobs` with `fixtures/demo.pdf` on lane3 yields one condition (SD4, no `name`/`color`); the others were not parsed or went to review. That is lane 1's output, not a UI issue, but the takeoff beat on A100 needs conditions to click, so the form is the fallback.
+- Pipeline paths verified end to end from the browser on lane3: measure on A-101 (60 LF for 540 pt at 9 pt/ft), quantities, `POST /api/jobs/{id}/conditions/{cid}/order`, padded board line trips the guard, `POST /api/orders/{id}/send`, `GET /api/orders/{id}/po` in the preview panel, SSE `/events/pm` (a draft inserted in MongoDB shows up in 0.2 s).
+- An EWO's draft took about 70 s from the foreman's tap to the PM queue (Jev route, then drafting; one escalation to Sonnet). Fine for the pipeline, long for a live video: record the PM beat with a draft already warm or shorten the model path.
+- `LANE_NOTES.md` on main still has a stray `<<<<<<< HEAD` conflict marker at the top of the entries (line 17); the matching `=======` and `>>>>>>>` are gone. Harmless, but worth deleting.
+Status: info

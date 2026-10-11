@@ -169,8 +169,8 @@ function renderRail() {
         : `<span class="chip warn" data-testid="sheet-scale-chip" title="No usable scale: set or calibrate it before measuring">${sc && sc.label === "NTS" ? "NTS" : "no scale"}</span>`;
       return `<button type="button" class="rrow ${s.id === S.sheetId ? "active" : ""} ${pt ? "pt" : ""}" data-sheet="${s.id}" data-testid="rail-sheet">
         <span class="rthumb">${s.thumb_path ? `<img src="${esc(s.thumb_path)}" alt="" loading="lazy">` : `<i>rendering…</i>`}</span>
-        <span class="rtext"><span class="rno" data-testid="rail-sheet-no">${esc(s.sheet_no || "p." + s.page)}</span><span class="rtitle">${esc(s.title || "Untitled sheet")}</span>
-        <span class="rmeta">${chip}${pt ? `<em>partitions</em>` : ""}</span></span></button>`;
+        <span class="rtext"><span class="rno"><span data-testid="rail-sheet-no">${esc(s.sheet_no || "p." + s.page)}</span>${pt ? `<em>partitions</em>` : ""}</span><span class="rtitle">${esc(s.title || "Untitled sheet")}</span>
+        <span class="rmeta">${chip}</span></span></button>`;
     }).join("")).join("");
   rail.querySelector(".rrow.active")?.scrollIntoView({ block: "nearest" });
 }
@@ -194,7 +194,6 @@ function condRow(c, i) {
   const tag = esc(c.type_tag), nm = esc(shortName(c));
   const src = c.source && c.source.sheet ? sheetById(c.source.sheet) : null;
   return `<div class="crow ${c.id === S.condId ? "active" : ""}" data-cid="${c.id}" data-testid="cond-row" style="--c:${esc(c.color)}" role="button" tabindex="0" aria-pressed="${c.id === S.condId}">
-    <span></span>
     <div><div class="ctop"><b class="ctag" data-testid="cond-tag">${tag}</b><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span></div>
       <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div></div>
     <div class="cside"><span class="cactive" data-testid="cond-active">ACTIVE</span>
@@ -224,7 +223,7 @@ function updateNumbers() {
       const cell = row.querySelector(`[data-u=${u}]`), v = q[u];
       cell.querySelector("b").textContent = u === "ea" ? String(Math.round(v)) : fmtNum(v, 1);
       cell.classList.toggle("zero", !v);
-      cell.classList.toggle("live", q.live && v > 0 && S.draft && UNIT[S.draft.kind] === u);
+      cell.classList.toggle("ticking", q.live && v > 0 && S.draft && UNIT[S.draft.kind] === u);
     }
   }
 }
@@ -258,7 +257,7 @@ function renderQty() {
     <td style="white-space:nowrap"><span class="swatch" style="background:${esc(c.color)}"></span><b>${esc(c.type_tag)}</b> <span class="muted">${esc(shortName(c))}</span></td>
     ${cell(q.lf, 1).replace("<td", '<td data-testid="qty-lf"')}${cell(q.sf, 1).replace("<td", '<td data-testid="qty-sf"')}${cell(q.ea, 0).replace("<td", '<td data-testid="qty-ea"')}
     <td class="num muted">${q.n || ""}</td>
-    <td class="num"><button type="button" class="sm" data-order="${c.id}" data-testid="qty-create-order" ${q.lf > 0 ? "" : "disabled"} title="${q.lf > 0 ? "Build a priced material order from these linear feet" : "An order is built from linear feet"}">Create order</button></td>
+    <td class="num"><button type="button" class="sm" data-order="${c.id}" data-testid="qty-create-order" ${q.lf > 0 && !q.live ? "" : "disabled"} title="${q.lf > 0 ? "Build a priced material order from these linear feet" : "An order is built from linear feet"}">Create order</button></td>
   </tr>`).join("");
 }
 
@@ -318,7 +317,7 @@ function draftMetrics() {
 function renderDraft() {
   gDraft.replaceChildren();
   const d = S.draft;
-  if (!d || d.sheet !== S.sheetId) { readout.hidden = true; updateNumbers(); return updateHint(); }
+  if (!d || d.sheet !== S.sheetId) { readout.hidden = true; updateNumbers(); renderQty(); return updateHint(); }
   const c = colorOf(d.cond), P = d.points.map(toImg), cur = S.cur && d.kind !== "count" ? toImg(S.cur) : null;
   const all = cur ? [...P, cur] : P;
   if (d.kind === "area" && all.length >= 3) svgEl("polygon", { points: all.map((p) => p.join(",")).join(" "), class: "vis area", fill: c, stroke: "none" }, gDraft);
@@ -336,7 +335,7 @@ function renderDraft() {
     readout.innerHTML = d.kind === "linear" && m.segText ? `${esc(m.text)}<small>+${esc(m.segText)}</small>` : esc(m.text);
     readout.style.left = S.cursor[0] + "px"; readout.style.top = S.cursor[1] + "px";
   } else readout.hidden = true;
-  updateNumbers(); updateHint();
+  updateNumbers(); renderQty(); updateHint();
 }
 
 function renderFocus() {
@@ -656,7 +655,7 @@ form.addEventListener("submit", async (e) => {
   if (!tag) return;
   const body = {
     type_tag: tag, color: f.get("color"),
-    studs: { size_in: +f.get("size_in"), gauge: +f.get("gauge"), spacing_in: +f.get("spacing_in") },
+    studs: { size_in: +f.get("size_in"), gauge: f.get("gauge") ? +f.get("gauge") : null, spacing_in: f.get("spacing_in") ? +f.get("spacing_in") : null },
     layers_each_side: Array.from({ length: +f.get("layers") }, () => ({ thickness_in: +f.get("thickness_in"), board_type: f.get("board_type") })),
     sides: +f.get("sides"),
   };

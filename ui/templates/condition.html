@@ -5,7 +5,7 @@
   <div>
     <a class="back" href="/jobs/{{ job.id }}/conditions">← Conditions</a>
     <h1><span class="swatch" style="background:{{ v.color if v else '#888' }};width:14px;height:14px"></span><span class="tagchip big" data-testid="condition-tag">{{ c.type_tag }}</span>
-      {{ c.studs.size_in | inches }} {{ c.studs.gauge }} ga @ {{ c.studs.spacing_in | inches }}
+      {{ c.studs | studs }}
       {% if c.fire_rating %}<span class="badge">{{ "%g" % c.fire_rating }} hr</span>{% endif %}</h1>
   </div>
   <a class="btn" href="/jobs/{{ job.id }}/takeoff?cond={{ c.id }}">Measure this condition</a>
@@ -15,7 +15,7 @@
   <section class="card" data-testid="condition-fields">
     <h2>Condition</h2>
     <dl class="fields">
-      <dt>Studs</dt><dd>{{ c.studs.size_in | inches }}, {{ c.studs.gauge }} ga, {{ c.studs.spacing_in | inches }} o.c.</dd>
+      <dt>Studs</dt><dd>{{ c.studs | studs }}</dd>
       <dt>Board</dt><dd>{% for l in c.layers_each_side %}{{ l.thickness_in | inches }} {{ l.board_type | board }}{% if not loop.last %}, then {% endif %}{% endfor %} · {{ "each side" if c.sides == 2 else "one side" if c.sides == 1 else "sides —" }}</dd>
       <dt>Insulation</dt><dd>{{ c.insulation or "—" }}</dd>
       <dt>Fire rating</dt><dd>{{ ("%g hr" % c.fire_rating) if c.fire_rating else "not rated" }}</dd>

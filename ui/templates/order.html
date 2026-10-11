@@ -64,8 +64,11 @@ async function loadPreview(flash = false) {
   const r = await call("GET", API.po(OID), null, { text: true });
   if (!r.ok) { preview.hidden = true; previewEmpty.hidden = false; return; }
   previewEmpty.hidden = true; preview.hidden = false;
-  preview.innerHTML = '<iframe title="Purchase order" sandbox></iframe>';
-  preview.firstElementChild.srcdoc = r.data.html;
+  // allow-same-origin without allow-scripts: the PO can't run code, and the frame can be sized to its content
+  preview.innerHTML = '<iframe title="Purchase order" sandbox="allow-same-origin"></iframe>';
+  const frame = preview.firstElementChild;
+  frame.addEventListener("load", () => { frame.style.height = Math.max(420, frame.contentDocument.documentElement.scrollHeight + 8) + "px"; });
+  frame.srcdoc = r.data.html;
   if (flash) { preview.classList.remove("flash"); void preview.offsetWidth; preview.classList.add("flash"); }
 }
 

@@ -103,8 +103,8 @@
       <label>Name <input name="name" placeholder="optional, e.g. Corridor wall" data-testid="cond-form-name"></label>
       <div class="g3">
         <label>Stud <select name="size_in">{% for v in (1.625, 2.5, 3.625, 4, 6, 8) %}<option value="{{ v }}" {{ "selected" if v == 3.625 }}>{{ v | inches }}</option>{% endfor %}</select></label>
-        <label>Gauge <select name="gauge">{% for g in boot.gauges %}<option {{ "selected" if g == 20 }}>{{ g }}</option>{% endfor %}</select></label>
-        <label>O.C. <select name="spacing_in">{% for v in (12, 16, 24) %}<option value="{{ v }}" {{ "selected" if v == 16 }}>{{ v }}"</option>{% endfor %}</select></label>
+        <label>Gauge <select name="gauge"><option value="">Per specs</option>{% for g in boot.gauges %}<option {{ "selected" if g == 20 }}>{{ g }}</option>{% endfor %}</select></label>
+        <label>O.C. <select name="spacing_in"><option value="">Per specs</option>{% for v in (12, 16, 24) %}<option value="{{ v }}" {{ "selected" if v == 16 }}>{{ v }}"</option>{% endfor %}</select></label>
       </div>
       <div class="g3">
         <label>Board <select name="board_type">{% for k, label in boot.boards.items() %}<option value="{{ k }}" {{ "selected" if k == "type_x" }}>{{ label }}</option>{% endfor %}</select></label>

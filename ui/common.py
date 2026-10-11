@@ -55,13 +55,27 @@ def discipline(sheet_no: str | None) -> dict:
     return {"code": code, "name": DISCIPLINES.get(code, "Other" if code == "·" else code)}
 
 
+def stud_text(studs: dict | None, spec: str = "per specs") -> str:
+    """3-5/8" 20 ga @ 16" o.c.; gauge and spacing are null when only the specs give them: 3-5/8" · gauge, o.c. per specs."""
+    s = studs or {}
+    size, gauge, spacing = inches(s.get("size_in")), s.get("gauge"), s.get("spacing_in")
+    if gauge and spacing:
+        return f'{size} {gauge} ga @ {inches(spacing)} o.c.'
+    if gauge:
+        return f'{size} {gauge} ga · o.c. {spec}'
+    if spacing:
+        return f'{size} @ {inches(spacing)} o.c. · gauge {spec}'
+    return f'{size} · gauge, o.c. {spec}'
+
+
 def condition_name(c: dict) -> str:
     """A1 - 3-5/8" 20ga @ 16" - 1L 5/8" Type X e.s. (the same shape lane 1 stores in `name`)."""
     studs = c.get("studs") or {}
     layers = c.get("layers_each_side") or []
     parts = [c.get("type_tag") or "?"]
     if studs:
-        parts.append(f'{inches(studs.get("size_in"))} {studs.get("gauge")}ga @ {inches(studs.get("spacing_in"))}')
+        gauge, spacing = studs.get("gauge"), studs.get("spacing_in")
+        parts.append(inches(studs.get("size_in")) + (f" {gauge}ga" if gauge else "") + (f' @ {inches(spacing)}' if spacing else "") + ("" if gauge and spacing else " (per specs)"))
     if layers:
         first = layers[0]
         parts.append(f'{len(layers)}L {inches(first.get("thickness_in"))} {BOARD_LABELS.get(first.get("board_type"), first.get("board_type"))}'
