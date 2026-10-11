@@ -11,6 +11,8 @@ router = APIRouter(tags=["procure"])
 def material_products(cid: str, key: str):
     try:
         return find.find_for_material(cid, key)
+    except find.SearchFailed as e:
+        raise HTTPException(502, str(e))
     except find.Unavailable as e:
         raise HTTPException(409, str(e))
     except LookupError as e:
@@ -28,7 +30,7 @@ def procure_all(cid: str):
             out.append(find.find_for_material(cid, m["key"]))
         except find.Unavailable as e:
             raise HTTPException(409, str(e))
-        except LookupError as e:
+        except (find.SearchFailed, LookupError) as e:
             errors[m["key"]] = str(e)
     return {"products": out, "errors": errors}
 
