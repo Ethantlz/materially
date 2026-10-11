@@ -111,7 +111,7 @@ infisical run --env=dev -- uv run python -m contracts.setup_db      # validators
 | `contracts/` | `$jsonSchema` validators, sample docs, seeds, `setup_db` | integrator |
 | `infra/` | Docker Compose for local Infisical and LiteLLM | integrator |
 | `scripts/` | `dev.ps1`, the smoke test, a synthetic drawing-set generator | integrator |
-| `docs/` | build spec, lane prompts, plans, screenshots | integrator |
+| `docs/` | build spec, screenshots | integrator |
 | `extract/` | drawing set → sheets, scales, conditions, materials, rooms | lane 1 |
 | `pipeline/` | measurements, orders and the guard, cost | lane 2 |
 | `ui/` | the screens (Jinja templates, CSS, vanilla JS) | lane 3 |
@@ -120,8 +120,8 @@ infisical run --env=dev -- uv run python -m contracts.setup_db      # validators
 | `projects/` | the projects list and alternates (Base bid + named alternates) | — |
 | `tests/` | tests per lane, in `tests/<lane>/` | each lane |
 
-Each lane works in its own worktree and branch (`lane/<name>`). Requests for changes in `app/` or `contracts/` go in
-[LANE_NOTES.md](LANE_NOTES.md). Drawing PDFs and keys never go in git.
+Each lane works in its own worktree and branch; changes to `app/` and `contracts/` go through the integrator.
+Drawing PDFs and keys never go in git.
 
 **More:** [docs/SPEC.md](docs/SPEC.md) (the build spec: flow, collections, models) ·
 [contracts/README.md](contracts/README.md) (data contracts, conventions, shared calls, routes)

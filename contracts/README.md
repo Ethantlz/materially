@@ -1,6 +1,6 @@
 # Contracts
 
-Only the integrator edits `app/` and `contracts/`. If a lane needs a change here, write it in `LANE_NOTES.md` on the lane branch.
+Only the integrator edits `app/` and `contracts/`. If a lane needs a change here, ask the integrator.
 
 | File | What |
 |---|---|

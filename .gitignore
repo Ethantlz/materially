@@ -25,3 +25,7 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+# internal working notes: kept locally, not published
+LANE_NOTES.md
+docs/prompts/
+docs/superpowers/
