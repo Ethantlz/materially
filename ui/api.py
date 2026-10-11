@@ -160,7 +160,9 @@ def conditions_page(request: Request, job_id: str):
     conds = jsonable(list(db.conditions.find({"job_id": job_id}).sort("type_tag", 1)))
     views = {v["id"]: v for v in condition_views(conds)}
     rejected = []
-    for it in jsonable(list(db.review_queue.find({"doc.job_id": job_id, "collection": "conditions"}).sort("at", -1).limit(20))):
+    # a validator rejection carries collection == "conditions"; a parse that failed before the write carries only the source
+    parse_items = db.review_queue.find({"doc.job_id": job_id, "$or": [{"collection": "conditions"}, {"source": {"$regex": "partition|parse"}}]})
+    for it in jsonable(list(parse_items.sort("at", -1).limit(20))):
         rejected.append({"tag": (it.get("doc") or {}).get("type_tag") or "?", "why": reason_summary(it.get("reason", "")), "at": it.get("at")})
     return _page(request, "conditions.html", job, "conditions", conditions=conds, views=views, sheets=_sheets_by_id(db, job_id),
                  rejected=rejected, measured=_measured(db, job_id))

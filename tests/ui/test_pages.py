@@ -9,7 +9,7 @@ from bson import ObjectId
 from fastapi.testclient import TestClient
 
 from app.main import app
-from contracts.samples import CONDITION_ID, DRAFT_ID, JOB_ID, ORDER_ID, SAMPLES
+from contracts.samples import CONDITION_ID, DRAFT_ID, JOB_ID, ORDER_ID, SAMPLES, SHEET_PT_ID
 from ui.api import inches
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +32,10 @@ def client(mock_db, monkeypatch):
         "source": "extract.partition", "collection": "conditions", "at": SAMPLES["jobs"]["created_at"],
         "doc": {"job_id": str(JOB_ID), "type_tag": "B4", "studs": {"size_in": 3.625, "gauge": 19, "spacing_in": 16}},
         "reason": "Document failed validation: {'details': [{'propertyName': 'gauge', 'reason': 'value was not found in enum', 'consideredValue': 19}]}",
+    })
+    mock_db.review_queue.insert_one({  # a parse that failed before any write has no `collection`
+        "source": "extract.partition", "at": SAMPLES["jobs"]["created_at"], "reason": "studs.size_in: expected number, got NoneType None",
+        "doc": {"job_id": str(JOB_ID), "sheet": str(SHEET_PT_ID), "type_tag": "SB2"},
     })
     mock_db.jobs.insert_one({"_id": EMPTY_JOB, "name": "Empty", "status": "ready", "created_at": SAMPLES["jobs"]["created_at"]})
     return TestClient(app)
@@ -80,6 +84,12 @@ def test_every_testid_exists_on_its_page(client):
         if not found:
             missing.append(f"{testid} on {page}")
     assert not missing, missing
+
+
+def test_conditions_page_lists_both_kinds_of_rejected_parse(client):
+    html = client.get(f"/jobs/{JOB_ID}/conditions").text
+    assert html.count('data-testid="condition-rejected"') == 2
+    assert "SB2" in html and "gauge: 19 not allowed" in html and "expected number" in html
 
 
 def test_pages_show_the_key_numbers(client):

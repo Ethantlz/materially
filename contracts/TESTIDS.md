@@ -142,6 +142,7 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - cond-row | /jobs/{job}/takeoff | one condition; click makes it active (js)
 - cond-tag | /jobs/{job}/takeoff | type tag on a row (js)
 - cond-name | /jobs/{job}/takeoff | name on a row (js)
+- cond-swatch | /jobs/{job}/takeoff | the condition's colour swatch on its row (js)
 - cond-lf | /jobs/{job}/takeoff | running linear feet of a condition, includes the shape being drawn (js)
 - cond-sf | /jobs/{job}/takeoff | running square feet (js)
 - cond-ea | /jobs/{job}/takeoff | running count (js)

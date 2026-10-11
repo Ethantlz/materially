@@ -194,6 +194,7 @@ function condRow(c, i) {
   const tag = esc(c.type_tag), nm = esc(shortName(c));
   const src = c.source && c.source.sheet ? sheetById(c.source.sheet) : null;
   return `<div class="crow ${c.id === S.condId ? "active" : ""}" data-cid="${c.id}" data-testid="cond-row" style="--c:${esc(c.color)}" role="button" tabindex="0" aria-pressed="${c.id === S.condId}">
+    <span class="cswatch" data-testid="cond-swatch"></span>
     <div><div class="ctop"><b class="ctag" data-testid="cond-tag">${tag}</b><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span></div>
       <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div></div>
     <div class="cside"><span class="cactive" data-testid="cond-active">ACTIVE</span>
@@ -373,6 +374,7 @@ function updateHint() {
       (m ? ` · <b>${esc(m.text)}</b> <span class="dim">${m.unit === "lf" ? fmtNum(m.qty, 2) + " LF · " : ""}Enter to finish · Esc ${S.draft.points.length >= MIN_PTS[S.draft.kind] ? "saves" : "cancels"}</span>`
         : ` <span class="dim">· ${S.tool === "count" ? "click each item, Enter to finish" : S.tool === "area" ? "click the corners, double-click to close" : "click along the wall, double-click to finish"}</span>`);
   }
+  if (!S.measOk && sh) html += ` <span class="dim">· measurements for this sheet couldn't load</span>`;
   hintEl.innerHTML = html;
 }
 
