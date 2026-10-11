@@ -117,12 +117,13 @@ summary { cursor: pointer; }
 #toast.show { opacity: 1; transform: translateX(-50%); } #toast.bad { background: #ff6b6b; color: #1a0505; }
 
 /* ---- projects page ---- */
-.home { display: grid; grid-template-columns: minmax(340px, 480px) minmax(0, 1fr); gap: 20px; align-items: start; }
-.home .card { margin: 0; }
-.drop { border: 1.5px dashed var(--line2); border-radius: 8px; padding: 30px 20px; text-align: center; color: var(--muted); cursor: pointer; font-weight: 500; margin-bottom: 14px; background: var(--bg0); }
+.projects { display: grid; grid-template-columns: 360px 1fr; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 28px 32px; align-items: start; }
+.projects .card { margin: 0; }
+.drop { border: 1px dashed var(--line); border-radius: 8px; padding: 30px 20px; text-align: center; color: var(--muted); cursor: pointer; font-weight: 500; margin-bottom: 14px; background: var(--bg0); }
 label.drop > input[type=file] { display: none; } .drop:hover, .drop.over { border-color: var(--accent); color: var(--ink); }
 .jobs { list-style: none; padding: 0; margin: 0; } .jobs li { padding: 10px 2px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; }
 .jobs li:first-child { border-top: 0; } .jobs a { color: var(--ink); font-weight: 600; text-decoration: none; } .jobs a:hover { color: var(--accent-text); }
+.alt-add { display: flex; align-items: center; gap: 6px; justify-content: flex-end; } .alt-add .input, .alt-add input { width: 132px; }
 
 /* ---- sheets page ---- */
 .jobhead { margin-bottom: 18px; }
@@ -188,7 +189,7 @@ body.phone main.page { max-width: 520px; padding: 14px 14px 40px; }
 .ewo button[type=submit] { width: 100%; padding: 15px; font-size: 16px; }
 .ewo .sent { margin-top: 14px; padding: 12px 14px; background: var(--ok-soft); border-radius: 8px; }
 
-@media (max-width: 1100px) { .cols, .split, .home { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .cols, .split, .projects { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .top { padding: 0 10px; gap: 8px; overflow-x: auto; } .proj { display: none; } .tabs a { padding: 0 9px; font-size: 12.5px; }
   main.page { padding: 14px 12px 40px; } .drafts { grid-template-columns: 1fr; } .tbl { font-size: 12.5px; } .tbl th, .tbl td { padding: 7px 8px; }

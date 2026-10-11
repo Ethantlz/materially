@@ -1,35 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Projects · materially{% endblock %}
 {% block body %}
-<div class="home">
+<div class="projects">
   <section class="card upload">
-    <h1>New project</h1>
-    <p class="muted">Upload the drawing set. Sheet names and scales show up within seconds.</p>
-    <form id="upload-form" data-testid="upload-form" style="margin-top:14px">
-      <label>Project name
-        <input name="name" required placeholder="e.g. Penn State Lab Fit-Out" data-testid="job-name">
-      </label>
-      <label class="drop" id="drop" data-testid="job-drop">
-        <input type="file" name="files" accept="application/pdf,.pdf" multiple required data-testid="job-files">
-        <span id="drop-text">Drop drawing PDFs here, or click to choose</span>
-      </label>
-      <button type="submit" data-testid="job-upload">Upload drawings</button>
+    <h2>New project</h2>
+    <p class="muted small">Upload a drawing set. Sheet names and scales show up within seconds.</p>
+    <form id="upload-form" data-testid="upload-form">
+      <input class="input" name="name" required placeholder="Project name" data-testid="job-name">
+      <label class="drop" id="drop" data-testid="job-drop"><input type="file" name="files" accept=".pdf" multiple required data-testid="job-files">
+        <span id="drop-text">Drop drawing PDFs here, or click to choose</span></label>
+      <button class="btn" type="submit" data-testid="job-upload">Upload drawings</button>
       <p class="err" id="upload-err" data-testid="upload-error"></p>
     </form>
   </section>
-
-  <section class="card">
-    <h2>Projects</h2>
-    {% if jobs %}
-    <ul class="jobs" data-testid="job-list">
-      {% for j in jobs %}
-      <li><a href="/jobs/{{ j.id }}/takeoff">{{ j.name }}</a>
-        <span class="muted">{{ j.pages_total or 0 }} sheets · {{ j.status }}</span></li>
+  <section data-testid="job-list">
+    <table class="tbl" data-testid="project-list">
+      <thead><tr><th>Project</th><th>Alternates</th><th class="num">Sheets</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for p in projects %}
+      <tr data-testid="project-row">
+        <td><a href="/jobs/{{ p.id }}/takeoff?alt={{ p.alternates[0].id }}" data-testid="project-link"><b>{{ p.name }}</b></a></td>
+        <td>{% for a in p.alternates %}<a class="chip {{ 'on' if a.kind == 'base' }}" href="/jobs/{{ p.id }}/takeoff?alt={{ a.id }}" data-testid="alt-chip">{{ a.name }}</a> {% endfor %}</td>
+        <td class="num">{{ p.pages_total or 0 }}</td>
+        <td><span class="pill {{ 'ok' if p.status == 'ready' else 'info' }}">{{ p.status }}</span></td>
+        <td class="num"><form class="alt-add" data-job="{{ p.id }}" data-testid="alt-add">
+          <input class="input sm" name="name" placeholder="New alternate" data-testid="alt-name"><button class="btn-secondary sm">Add</button></form></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">No projects yet. Upload a drawing set to start.</td></tr>
       {% endfor %}
-    </ul>
-    {% else %}
-    <p class="muted">No projects yet.</p>
-    {% endif %}
+      </tbody>
+    </table>
   </section>
 </div>
 {% endblock %}
@@ -53,5 +54,12 @@ form.addEventListener("submit", async (e) => {
   document.getElementById("upload-err").textContent = errText(r, "Upload failed");
   btn.disabled = false; btn.textContent = "Upload drawings";
 });
+document.querySelectorAll("form.alt-add").forEach((f) => f.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = f.name.value.trim();
+  if (!name) return;
+  const r = await call("POST", [`/api/jobs/${f.dataset.job}/alternates`], { name });
+  if (r.ok) location.reload(); else toast(r.data?.detail || "Couldn't add the alternate", true);
+}));
 </script>
 {% endblock %}

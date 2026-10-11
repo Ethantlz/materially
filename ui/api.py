@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from app.db import get_db, jsonable, oid
 from contracts.schemas import GAUGES
 from extract.scale import COMMON_LABELS
+from projects.alternates import project_rows
 from ui import standins
 from ui.common import (  # noqa: F401  (inches and reason_summary are re-exported for the tests)
     BOARD_LABELS, PALETTE, condition_views, discipline, inches, next_color, reason_summary, stud_text,
@@ -102,8 +103,7 @@ def _measured(db, job_id: str) -> dict[str, dict]:
 
 @router.get("/")
 def index(request: Request):
-    jobs = jsonable(list(get_db().jobs.find().sort("created_at", -1).limit(50)))
-    return _page(request, "index.html", jobs=jobs)
+    return _page(request, "index.html", projects=project_rows())
 
 
 @router.get("/jobs/{job_id}")
