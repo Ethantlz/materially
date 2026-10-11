@@ -123,6 +123,7 @@ class MeasurementIn(BaseModel):
     kind: Literal["linear", "area", "count"]
     points: list[list[float]]  # [[x, y], ...] in PDF points, origin top-left
     height_ft: float | None = Field(default=None, ge=0, le=60)
+    alternate_id: str | None = None  # None = the base bid
 
 
 @router.post("/api/measurements")
@@ -131,7 +132,7 @@ def add_measurement(body: MeasurementIn):
     if not sheet:
         raise HTTPException(422, "sheet is required")
     try:
-        new_id = takeoff.add_measurement(body.job_id, sheet, body.condition_id, body.kind, body.points, body.height_ft)
+        new_id = takeoff.add_measurement(body.job_id, sheet, body.condition_id, body.kind, body.points, body.height_ft, body.alternate_id)
     except LookupError as e:
         raise HTTPException(404, str(e))
     except ValueError as e:  # includes takeoff.ScaleMissing
@@ -160,14 +161,14 @@ def undo_measurement(sheet_id: str):
 
 
 @router.get("/api/jobs/{job_id}/quantities")
-def job_quantities(job_id: str):
-    return takeoff.quantities(job_id)
+def job_quantities(job_id: str, alternate_id: str | None = None):
+    return takeoff.quantities(job_id, alternate_id)
 
 
 @router.post("/api/jobs/{job_id}/conditions/{condition_id}/order")
-def order_from_takeoff(job_id: str, condition_id: str):
+def order_from_takeoff(job_id: str, condition_id: str, alternate_id: str | None = None):
     try:
-        order_id = orders_mod.build_from_takeoff(job_id, condition_id)
+        order_id = orders_mod.build_from_takeoff(job_id, condition_id, alternate_id)
     except LookupError as e:
         raise HTTPException(404, str(e))
     except ValueError as e:
