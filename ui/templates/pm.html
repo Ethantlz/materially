@@ -18,9 +18,9 @@ const seen = new Set([...list.querySelectorAll(".draft")].map((el) => el.dataset
 async function addDraft(id) {
   if (!id || seen.has(id)) return;
   seen.add(id);
-  const r = await fetch(API.draftCard(id));
+  const r = await Pm.draftCard(id);
   if (!r.ok) return seen.delete(id);
-  list.insertAdjacentHTML("afterbegin", await r.text());
+  list.insertAdjacentHTML("afterbegin", r.data.html);
   list.firstElementChild.classList.add("fresh");
   document.getElementById("pm-empty").hidden = true;
 }
@@ -31,8 +31,8 @@ let polling = null;
 function poll() {
   live.textContent = "live (polling)"; live.className = "live on";
   polling = setInterval(async () => {
-    const r = await fetch(`/ui/jobs/${JOB_ID}/drafts`);
-    if (r.ok) for (const id of (await r.json()).reverse()) await addDraft(id);
+    const r = await Pm.draftIds(JOB_ID);
+    if (r.ok) for (const id of [...r.data].reverse()) await addDraft(id);
   }, 3000);
 }
 const es = new EventSource(API.events(JOB_ID));
