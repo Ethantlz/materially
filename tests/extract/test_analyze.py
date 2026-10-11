@@ -185,3 +185,25 @@ def test_mongodb_rejection_lands_in_review_queue(live_db, synthetic_pdf, monkeyp
         assert reviews[0]["collection"] == "conditions"
     finally:
         forget_job(db, job_id)
+
+
+def test_failed_parse_with_an_answer_is_rejected_by_mongodb(live_db, synthetic_pdf, monkeypatch):
+    """TaskFailed carrying the model's last (invalid) answer: MongoDB itself rejects it into review_queue."""
+    db = live_db
+    job_id = str(db.jobs.insert_one({"name": "taskfailed test", "created_at": now(), "status": "processing"}).inserted_id)
+    try:
+        sheet, page = next((s, p) for s, p in name_sheets(db, job_id, [synthetic_pdf]) if s["sheet_no"] == "A-501")
+        bad = {"type_tag": "A1", "studs": {"size_in": None, "gauge": None, "spacing_in": None}, "layers_each_side": LAYERS}
+
+        def fails(task, payload, *a, **kw):
+            raise router.TaskFailed(task, "studs.size_in: expected number", "{}", result=bad, model="claude-sonnet-5-5")
+
+        monkeypatch.setattr(router, "run_task", fails)
+        analyze.parse_sheet(db, job_id, sheet, page)
+        assert db.conditions.count_documents({"job_id": job_id}) == 0
+        reviews = list(db.review_queue.find({"source": "extract.partition", "doc.job_id": job_id}))
+        assert len(reviews) == 3 and all("Document failed validation" in r["reason"] for r in reviews)
+        assert reviews[0]["doc"]["routing"] == {"task": "parse_partition", "model": "claude-sonnet-5-5", "escalated": True}
+        assert reviews[0]["doc"]["source"]["sheet"] == str(sheet["_id"])
+    finally:
+        forget_job(db, job_id)
