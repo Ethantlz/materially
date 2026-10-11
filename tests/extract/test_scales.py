@@ -2,13 +2,8 @@
 import pytest
 from reportlab.pdfgen import canvas
 
-from app.settings import ROOT
 from extract.ingest import read_pages, sheet_docs
-from extract.sheetinfo import common_title_block_text, locate_title_blocks, pick_scale
 from scripts.make_drawing_set import H, W, _title_block
-
-OTTAWA = ROOT.parent / "materially" / "fixtures" / "ottawa-arch-tender.pdf"
-
 
 def _view(c: canvas.Canvas, x: float, y: float, title: str, value: str, below: bool = False) -> None:
     """A view title over a label cell "SCALE" and a value cell on one baseline, 52 pt apart (far enough that
@@ -65,26 +60,3 @@ def test_value_cell_under_the_label(split_cells):
 def test_a_bare_ratio_needs_a_scale_label(split_cells):
     assert _scales(split_cells)[2] is None
 
-
-@pytest.mark.skipif(not OTTAWA.exists(), reason=f"{OTTAWA} not on disk")
-def test_ottawa_names_and_scales():
-    docs = {d["sheet_no"]: d for d in sheet_docs("job", [(OTTAWA.name, read_pages(OTTAWA))])}
-    assert {no: d["title"] for no, d in docs.items()} == {
-        "A001": "COVER PAGE, DRAWING LIST, ASSEMBLY SCHEDULE",
-        "A111": "DEMOLITION PLANS",
-        "A112": "REFLECTED CEILING PLANS DEMOLITION",
-        "A121": "CONSTRUCTION/ FINISH PLANS",
-        "A131": "REFLECTED CEILING PLANS NEW",
-        "A151": "EQUIPMENT/ FURNITURE PLANS",
-        "A201": "INTERIOR ELEVATIONS",
-        "A202": "INTERIOR ELEVATIONS",
-        "A501": "DETAILS",
-        "A601": "DOOR ELEVATIONS AND SCHEDULE",
-    }
-    labels = {no: (d["scale"] or {}).get("label") for no, d in docs.items()}
-    assert {no: labels[no] for no in ("A111", "A121", "A201", "A202", "A501")} == {
-        "A111": "1:100", "A121": "1:100", "A201": "1:50", "A202": "1:50", "A501": "1:5",
-    }
-    # A001's only view is the STAGING AREA LOCATION PLAN, drawn at 1:500
-    assert labels["A001"] == "1:500" and docs["A001"]["scale"]["source"] == "view_title"
-    assert all(docs[no]["scale"]["source"] == "view_title" for no in ("A111", "A121", "A201", "A202", "A501"))

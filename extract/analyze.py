@@ -85,8 +85,9 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
             out = router.run_task("parse_partition", block.text, "conditions", job_id=job_id, db=db)
     except router.TaskFailed as e:
         if isinstance(e.result, dict):  # an answer that failed the contract: MongoDB's validator rejects it into review
-            routing = {"task": "parse_partition", "model": e.model, "escalated": True}
-            return insert_or_review(db, "conditions", {**e.result, "job_id": job_id, "source": source, "routing": routing},
+            result, changed = conditions.nominal(e.result)
+            routing = {"task": "parse_partition", "model": e.model, "escalated": True, **({"normalized": changed} if changed else {})}
+            return insert_or_review(db, "conditions", {**result, "job_id": job_id, "source": source, "routing": routing},
                                     "extract.partition")
         to_review(
             db,
@@ -95,12 +96,9 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
             e.reason,
         )
         return None
-    doc = {
-        **out["result"],
-        "job_id": job_id,
-        "source": source,
-        "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
-    }
+    result, changed = conditions.nominal(out["result"])
+    routing = {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]}
+    doc = {**result, "job_id": job_id, "source": source, "routing": {**routing, **({"normalized": changed} if changed else {})}}
     return conditions.insert(db, doc, "extract.partition")
 
 

@@ -137,3 +137,28 @@ def test_mongodb_rejects_a_bad_manual_condition_into_review(live_db):
         assert review["collection"] == "conditions"
     finally:
         forget_job(live_db, job_id)
+
+
+def test_metric_conversions_snap_to_nominal_sizes():
+    parsed_metric = {
+        "type_tag": "P3",
+        "studs": {"size_in": 3.622, "gauge": None, "spacing_in": 23.622},
+        "layers_each_side": [{"thickness_in": 0.63, "board_type": "type_x"}, {"thickness_in": 0.748, "board_type": "regular"}],
+    }
+    out, changed = conditions.nominal(parsed_metric)
+    assert out["studs"] == {"size_in": 3.625, "gauge": None, "spacing_in": 24}
+    assert [layer["thickness_in"] for layer in out["layers_each_side"]] == [0.625, 0.75]
+    assert changed == {"studs.size_in": 3.622, "studs.spacing_in": 23.622,
+                       "layers_each_side.0.thickness_in": 0.63, "layers_each_side.1.thickness_in": 0.748}
+    assert parsed_metric["studs"]["spacing_in"] == 23.622, "the model's answer is not changed in place"
+
+
+def test_nominal_leaves_exact_and_odd_values_alone():
+    out, changed = conditions.nominal(A1)
+    assert out == A1 and changed == {}
+    odd = {**A1, "studs": {"size_in": 3.5, "gauge": 20, "spacing_in": 19.2}}
+    assert conditions.nominal(odd) == (odd, {})
+    far = {**A1, "studs": {"size_in": 5.0, "gauge": 20, "spacing_in": 20}}  # not near any trade size: kept
+    assert conditions.nominal(far) == (far, {})
+    broken = {"type_tag": "SB2", "studs": {"size_in": None}, "layers_each_side": None}
+    assert conditions.nominal(broken) == (broken, {})
