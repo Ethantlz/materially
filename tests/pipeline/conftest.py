@@ -13,10 +13,11 @@ from bson import ObjectId
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.db import now
 from contracts.samples import SAMPLES
 from pipeline.api import router
 
-JOB_COLLECTIONS = ("rooms", "ewos", "ewo_drafts", "conditions", "orders", "usage")
+JOB_COLLECTIONS = ("rooms", "ewos", "ewo_drafts", "conditions", "orders", "usage", "sheets", "measurements", "outbox")
 
 
 @pytest.fixture
@@ -38,6 +39,7 @@ def fresh_job(db):
     for name in JOB_COLLECTIONS:
         db[name].delete_many({"job_id": job_id})
     db.review_queue.delete_many({"doc.job_id": job_id})
+    db.jobs.delete_one({"_id": ObjectId(job_id)})
 
 
 @pytest.fixture
@@ -70,3 +72,13 @@ def add_condition(db, job_id: str, **over) -> str:
     """The sample A1 condition (3-5/8 20 ga at 16, one layer 5/8 Type X each side) on this job."""
     doc = {k: v for k, v in SAMPLES["conditions"].items() if k != "_id"}
     return str(db.conditions.insert_one({**doc, "job_id": job_id, **over}).inserted_id)
+
+
+def add_sheet(db, job_id: str, pt_per_ft: float | None = 9.0, page: int = 1, **over) -> str:
+    """A floor-plan sheet; pt_per_ft 9.0 is 1/8" = 1'-0". None leaves the sheet without a scale."""
+    scale = {"label": "1/8\" = 1'-0\"", "pt_per_ft": pt_per_ft, "source": "title_block"} if pt_per_ft else None
+    doc = {
+        "job_id": job_id, "page": page, "file": "set.pdf", "file_page": page, "sheet_no": f"A-{100 + page}", "title": "FLOOR PLAN",
+        "kind": "floor_plan", "size_pt": [3024.0, 2160.0], "scale": scale, "created_at": now(),
+    }
+    return str(db.sheets.insert_one({**doc, **over}).inserted_id)

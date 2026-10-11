@@ -11,10 +11,12 @@ from bson import ObjectId
 
 from app.db import get_db, is_mock, now, oid
 from contracts.validate import validate
+from pipeline import takeoff
 
 log = logging.getLogger("materially.orders")
 
 TOTAL_PLACES = 2  # dollars and cents
+DEFAULT_HEIGHT_FT = 10  # a wall with no height anywhere: condition, measurements
 
 
 class OrderLocked(RuntimeError):
@@ -135,6 +137,20 @@ def build(job_id: str, condition_id: str, lf: float, height_ft: float) -> str:
     price(order_id)
     guard(order_id)
     return order_id
+
+
+def build_from_takeoff(job_id: str, condition_id: str) -> str:
+    """Order for a condition from what was measured: LF is the condition's total linear quantity; the height is
+    the condition's height_ft, else the LF-weighted height typed on its measurements, else 10 ft.
+    LookupError: no such condition. ValueError: nothing measured yet."""
+    cond_id = oid(condition_id)
+    condition = get_db().conditions.find_one({"_id": cond_id}) if cond_id else None
+    if condition is None:
+        raise LookupError(f"no such condition: {condition_id!r}")
+    lf, measured_height = takeoff.linear_takeoff(job_id, condition_id)
+    if lf <= 0:
+        raise ValueError(f"no linear footage measured for condition {condition.get('type_tag') or condition_id} yet: measure its walls first")
+    return build(job_id, condition_id, round(lf, 2), condition.get("height_ft") or measured_height or DEFAULT_HEIGHT_FT)
 
 
 def _over_condition() -> dict:

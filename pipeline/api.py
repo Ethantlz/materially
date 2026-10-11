@@ -5,6 +5,12 @@
     POST /api/ewos/{id}/route              (re)route one EWO now
     GET  /api/drafts?job_id                the job's drafts, newest first
     GET  /events/pm?job_id                 SSE: each new ewo_drafts insert (change stream)
+    POST /api/measurements                 points drawn on a sheet for a condition -> LF / SF / EA from the sheet scale
+    GET  /api/sheets/{id}/measurements     the sheet's measurements, oldest first
+    DELETE /api/measurements/{id}          remove one
+    POST /api/sheets/{id}/measurements/undo  remove the sheet's latest
+    GET  /api/jobs/{job_id}/quantities     measurements $grouped by condition and unit, sorted by type_tag
+    POST /api/jobs/{job_id}/conditions/{cid}/order  priced order from the condition's measured LF
     POST /api/orders                       condition x LF x height -> priced order
     GET  /api/orders/{id}                  the order and its unpriced items
     PATCH /api/orders/{id}/lines/{i}       change a line's qty -> total and guard re-run
@@ -12,6 +18,7 @@
     GET  /api/jobs/{job_id}/cost           usage $group: calls, cost_usd, by task and model
 """
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -21,6 +28,7 @@ from app.db import get_db, jsonable, oid
 from pipeline import events
 from pipeline import ewo as ewo_mod
 from pipeline import orders as orders_mod
+from pipeline import takeoff
 
 log = logging.getLogger("materially.pipeline")
 
@@ -105,6 +113,68 @@ async def pm_events(request: Request, job_id: str | None = None):
     )
 
 
+# --- takeoff ----------------------------------------------------------------------------------------------------
+
+class MeasurementIn(BaseModel):
+    job_id: str
+    sheet: str | None = None  # sheets._id hex; `sheet_id` is accepted too
+    sheet_id: str | None = None
+    condition_id: str
+    kind: Literal["linear", "area", "count"]
+    points: list[list[float]]  # [[x, y], ...] in PDF points, origin top-left
+    height_ft: float | None = Field(default=None, ge=0, le=60)
+
+
+@router.post("/api/measurements")
+def add_measurement(body: MeasurementIn):
+    sheet = body.sheet or body.sheet_id
+    if not sheet:
+        raise HTTPException(422, "sheet is required")
+    try:
+        new_id = takeoff.add_measurement(body.job_id, sheet, body.condition_id, body.kind, body.points, body.height_ft)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:  # includes takeoff.ScaleMissing
+        raise HTTPException(422, str(e))
+    return jsonable(get_db().measurements.find_one({"_id": oid(new_id)}))
+
+
+@router.get("/api/sheets/{sheet_id}/measurements")
+def list_measurements(sheet_id: str):
+    return jsonable(takeoff.list_measurements(sheet_id))
+
+
+@router.delete("/api/measurements/{measurement_id}")
+def delete_measurement(measurement_id: str):
+    if not takeoff.delete_measurement(measurement_id):
+        raise HTTPException(404, "No such measurement.")
+    return {"deleted": measurement_id}
+
+
+@router.post("/api/sheets/{sheet_id}/measurements/undo")
+def undo_measurement(sheet_id: str):
+    gone = takeoff.undo_last(sheet_id)
+    if gone is None:
+        raise HTTPException(404, "Nothing to undo on this sheet.")
+    return {"deleted": str(gone["_id"]), "measurement": jsonable(gone)}
+
+
+@router.get("/api/jobs/{job_id}/quantities")
+def job_quantities(job_id: str):
+    return takeoff.quantities(job_id)
+
+
+@router.post("/api/jobs/{job_id}/conditions/{condition_id}/order")
+def order_from_takeoff(job_id: str, condition_id: str):
+    try:
+        order_id = orders_mod.build_from_takeoff(job_id, condition_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return _build_response(order_id)
+
+
 # --- orders -----------------------------------------------------------------------------------------------------
 
 class OrderIn(BaseModel):
@@ -129,6 +199,11 @@ def _get_order(order_id: str) -> dict:
     return order
 
 
+def _build_response(order_id: str) -> dict:
+    order = _order_view(_get_order(order_id))
+    return {"order_id": order_id, "id": order_id, "total": order["total"], "unpriced": order["unpriced"], "guard": order["guard"], "order": order}
+
+
 @router.post("/api/orders")
 def build_order(body: OrderIn):
     try:
@@ -137,8 +212,7 @@ def build_order(body: OrderIn):
         raise HTTPException(404, str(e))
     except ValueError as e:
         raise HTTPException(422, str(e))
-    order = _order_view(_get_order(order_id))
-    return {"order_id": order_id, "id": order_id, "total": order["total"], "unpriced": order["unpriced"], "guard": order["guard"], "order": order}
+    return _build_response(order_id)
 
 
 @router.get("/api/orders/{order_id}")
