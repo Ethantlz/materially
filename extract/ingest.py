@@ -11,7 +11,14 @@ from pymongo.database import Database
 
 from app.db import insert_or_review, now, oid
 from extract.pdftext import bookmarks_by_page, page_label, page_segments
-from extract.sheetinfo import PageText, common_title_block_text, guess_kind, pick_scale, sheet_name
+from extract.sheetinfo import (
+    PageText,
+    common_title_block_text,
+    guess_kind,
+    locate_title_blocks,
+    pick_scale,
+    sheet_name,
+)
 
 log = logging.getLogger("materially.ingest")
 
@@ -40,6 +47,8 @@ def read_pages(pdf_path: Path) -> list[PageText]:
 def sheet_docs(job_id: str, files: list[tuple[str, list[PageText]]]) -> list[dict]:
     all_pages = [p for _, pages in files for p in pages]
     common = common_title_block_text(all_pages)
+    locate_title_blocks(all_pages, common)
+    common = common_title_block_text(all_pages)  # again, inside the located title blocks only
     docs, n = [], 0
     for file_name, pages in files:
         for i, p in enumerate(pages, 1):

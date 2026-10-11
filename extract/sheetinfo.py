@@ -75,6 +75,29 @@ def common_title_block_text(pages: list[PageText]) -> set[str]:
     return {t for t, c in counts.items() if c >= need}
 
 
+def locate_title_blocks(pages: list[PageText], common: set[str]) -> None:
+    """Set each page's tb_corner from where the set's repeating title-block text sits on it.
+
+    Repeating text only in the right strip -> a right strip, corner (x, 0); only along the bottom -> a bottom
+    band, corner (0, y); only in the bottom-right corner -> a box. Without this, view titles near the bottom
+    of a right-strip sheet (or the right of a bottom-band sheet) read as title block. Pages with no repeating
+    text keep the edge-band guess.
+    """
+    for p in pages:
+        anchors = [s for s in p.segs if p.in_edge_band(s) and len(t := normalize(s.text).strip()) >= 3 and t in common]
+        right = [s for s in anchors if s.cx > 0.72 * p.width]
+        bottom = [s for s in anchors if s.cy > 0.82 * p.height]
+        corner = [s for s in right if s in bottom]
+        only_right, only_bottom = len(right) - len(corner), len(bottom) - len(corner)
+        pad = 0.01 * max(p.width, p.height)
+        if only_right > only_bottom:
+            p.tb_corner = (max(0.0, min(s.x0 for s in right) - pad), 0.0)
+        elif only_bottom > only_right:
+            p.tb_corner = (0.0, max(0.0, min(s.top for s in bottom) - pad))
+        elif corner:
+            p.tb_corner = (max(0.0, min(s.x0 for s in corner) - pad), max(0.0, min(s.top for s in corner) - pad))
+
+
 def _sheet_no_in(text: str) -> str | None:
     t = normalize(text).strip()
     if SHEET_NO.fullmatch(t):
