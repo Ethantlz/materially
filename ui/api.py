@@ -361,3 +361,11 @@ def panel_tracking(request: Request, job_id: str, alt: str | None = None):
 @router.get("/ui/jobs/{job_id}/panel/review", response_class=HTMLResponse)
 def panel_review(request: Request, job_id: str):
     return _partial(request, "_review.html", items=_review_items(get_db(), job_id))
+
+
+@router.get("/ui/panel/sources", response_class=HTMLResponse)
+def panel_sources(request: Request):
+    """The supplier sites product searches are limited to. The collection belongs to procurement's API
+    (GET/POST/DELETE /api/product-sources); reading it here keeps the popup working before that lane merges."""
+    sources = jsonable(list(get_db().product_sources.find().sort("created_at", 1)))
+    return _partial(request, "_sources.html", sources=sources)

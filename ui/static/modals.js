@@ -41,6 +41,8 @@
   bind("open-ewos", "EWOs", () => `/ui/jobs/${JOB_ID}/panel/ewos`);
   bind("open-tracking", "Tracking", () => `/ui/jobs/${JOB_ID}/panel/tracking?alt=${alt()}`);
   bind("open-review", "Review queue", () => `/ui/jobs/${JOB_ID}/panel/review`);
+  // The supplier sites product searches use: the same list on every job, so no job id in the url.
+  bind("open-sources", "Suppliers", () => "/ui/panel/sources");
 
   // A link inside a popup stays in the takeoff: an order link (the orders list, the tracking list) opens that order in the
   // same dialog, and a link with data-modal-open (Order's "← Orders") opens that panel. Both keep a plain href as the

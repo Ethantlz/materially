@@ -210,3 +210,9 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - cond-height-input | /jobs/{job}/takeoff | wall height in feet for the new sub-condition; Enter or Add creates it (js)
 - cond-sub-row | /jobs/{job}/takeoff | a sub-condition (the wall type at another height), indented under its parent; click makes it active (js)
 - cond-pull-products | /jobs/{job}/takeoff | Pull product data for every material of an expanded condition (js)
+- open-sources | /jobs/{job}/takeoff | opens the Suppliers popup
+- sources-panel | /ui/panel/sources | the Suppliers popup: the supplier sites product searches look on
+- source-row | /ui/panel/sources | one supplier site (only when a supplier has been added)
+- sources-empty | /ui/panel/sources | empty row of the supplier table (only when there are none)
+- source-add | /ui/panel/sources | form that adds a supplier site
+- source-url | /ui/panel/sources | address of the supplier site to add
