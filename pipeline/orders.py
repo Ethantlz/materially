@@ -102,9 +102,9 @@ def retotal(order_id: str) -> None:
     )
 
 
-def build(job_id: str, condition_id: str, lf: float, height_ft: float) -> str:
+def build(job_id: str, condition_id: str, lf: float, height_ft: float, *, alternate_id: str | None = None) -> str:
     """Lines from orders.math.lines_for(condition, lf, height_ft), priced by an aggregation that $lookups
-    price_book and $merges into orders. Return the order _id hex.
+    price_book and $merges into orders. Return the order _id hex. alternate_id None = the base bid.
     LookupError: no such condition. ValueError: bad input, or the order fails the orders validator."""
     db = get_db()
     cond_id = oid(condition_id)
@@ -124,6 +124,7 @@ def build(job_id: str, condition_id: str, lf: float, height_ft: float) -> str:
         "condition_id": condition_id,
         "lf": lf,
         "height_ft": height_ft,
+        "alternate_id": alternate_id,
         "lines": lines,
         "total": None,
         "supplier_email": None,
@@ -139,18 +140,19 @@ def build(job_id: str, condition_id: str, lf: float, height_ft: float) -> str:
     return order_id
 
 
-def build_from_takeoff(job_id: str, condition_id: str) -> str:
-    """Order for a condition from what was measured: LF is the condition's total linear quantity; the height is
-    the condition's height_ft, else the LF-weighted height typed on its measurements, else 10 ft.
-    LookupError: no such condition. ValueError: nothing measured yet."""
+def build_from_takeoff(job_id: str, condition_id: str, alternate_id: str | None = None) -> str:
+    """Order for a condition from what was measured in one alternate: LF is the condition's total linear quantity
+    there; the height is the condition's height_ft, else the LF-weighted height typed on its measurements, else 10 ft.
+    None or the base bid's id = the base bid. LookupError: no such condition. ValueError: nothing measured yet."""
     cond_id = oid(condition_id)
     condition = get_db().conditions.find_one({"_id": cond_id}) if cond_id else None
     if condition is None:
         raise LookupError(f"no such condition: {condition_id!r}")
-    lf, measured_height = takeoff.linear_takeoff(job_id, condition_id)
+    lf, measured_height = takeoff.linear_takeoff(job_id, condition_id, alternate_id)
     if lf <= 0:
         raise ValueError(f"no linear footage measured for condition {condition.get('type_tag') or condition_id} yet: measure its walls first")
-    return build(job_id, condition_id, round(lf, 2), condition.get("height_ft") or measured_height or DEFAULT_HEIGHT_FT)
+    return build(job_id, condition_id, round(lf, 2), condition.get("height_ft") or measured_height or DEFAULT_HEIGHT_FT,
+                 alternate_id=alternate_id)
 
 
 def _over_condition() -> dict:

@@ -13,6 +13,7 @@ import re
 
 from app.db import get_db, insert_or_review, is_mock, now, oid
 from contracts.validate import validate
+from projects.alternates import ensure_base, scope
 
 KINDS = {"linear": ("lf", 2), "area": ("sf", 3), "count": ("ea", 1)}  # kind -> (unit, minimum points)
 QUANTITY_PLACES = 6
@@ -38,8 +39,10 @@ def _find(db, collection: str, hex_id: str, what: str) -> dict:
     return doc
 
 
-def add_measurement(job_id: str, sheet_id: str, condition_id: str, kind: str, points: list, height_ft: float | None = None) -> str:
+def add_measurement(job_id: str, sheet_id: str, condition_id: str, kind: str, points: list, height_ft: float | None = None,
+                    alternate_id: str | None = None) -> str:
     """Measure `points` on a sheet for a condition and store it. Return the measurement _id hex.
+    alternate_id None (or the base bid's id) means the base bid, like every measurement made before alternates.
     LookupError: no such sheet or condition. ScaleMissing: the sheet has no scale. ValueError: anything else wrong."""
     db = get_db()
     sheet = _find(db, "sheets", sheet_id, "sheet")
@@ -69,6 +72,7 @@ def add_measurement(job_id: str, sheet_id: str, condition_id: str, kind: str, po
         "unit": unit,
         "pt_per_ft": pt_per_ft,
         "height_ft": height_ft,
+        "alternate_id": alternate_id or str(ensure_base(job_id, db)["_id"]),
         "label": None,
         "created_at": now(),
     }
@@ -101,12 +105,13 @@ def _natural(tag: str | None) -> list:
     return [(0, int(p)) if p.isdigit() else (1, p.lower()) for p in re.findall(r"\d+|\D+", tag or "￿")]
 
 
-def quantities(job_id: str) -> list[dict]:
+def quantities(job_id: str, alternate_id: str | None = None) -> list[dict]:
     """One row per condition and unit: {condition_id, type_tag, name, color, unit, quantity, measurements},
-    sorted by type_tag. $group over measurements, then $lookup of the condition's name, color and type_tag."""
+    sorted by type_tag, for one alternate (None or the base bid's id = the base bid).
+    $group over measurements, then $lookup of the condition's name, color and type_tag."""
     db = get_db()
     group = [
-        {"$match": {"job_id": job_id}},
+        {"$match": {"job_id": job_id, **scope(job_id, alternate_id)}},
         {"$group": {"_id": {"condition_id": "$condition_id", "unit": "$unit"}, "quantity": {"$sum": "$quantity"}, "measurements": {"$sum": 1}}},
     ]
     if is_mock():  # mongomock has neither $convert nor $lookup with let: join the conditions in Python
@@ -137,10 +142,11 @@ def quantities(job_id: str) -> list[dict]:
     return sorted(out, key=lambda r: (_natural(r["type_tag"]), r["unit"]))
 
 
-def linear_takeoff(job_id: str, condition_id: str) -> tuple[float, float | None]:
-    """(total LF measured for a condition, the LF-weighted mean of the heights typed on those measurements or None)."""
+def linear_takeoff(job_id: str, condition_id: str, alternate_id: str | None = None) -> tuple[float, float | None]:
+    """(total LF measured for a condition in one alternate, the LF-weighted mean of the heights typed on those
+    measurements or None). None or the base bid's id = the base bid."""
     rows = list(get_db().measurements.aggregate([
-        {"$match": {"job_id": job_id, "condition_id": condition_id, "kind": "linear"}},
+        {"$match": {"job_id": job_id, "condition_id": condition_id, "kind": "linear", **scope(job_id, alternate_id)}},
         {"$group": {
             "_id": None,
             "lf": {"$sum": "$quantity"},
