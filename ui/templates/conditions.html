@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Conditions · {{ job.name }}{% endblock %}
+{% block body %}
+<div class="pagehead">
+  <h1>Conditions library</h1>
+  <p class="muted">Every partition type, read from the drawings into a document MongoDB validates. A bad parse is rejected into the <a href="/review?job_id={{ job.id }}">review queue</a>.</p>
+</div>
+{% if conditions %}
+<table class="tbl" data-testid="conditions-table">
+  <thead><tr><th>Type</th><th>Studs</th><th>Board each side</th><th>Sides</th><th>Fire</th><th>STC</th><th>UL</th><th>Height</th><th>Source</th><th>Read by</th></tr></thead>
+  <tbody>
+  {% for c in conditions %}
+  <tr data-testid="condition-row">
+    <td><a class="tagchip" href="/conditions/{{ c.id }}" data-testid="condition-link">{{ c.type_tag }}</a></td>
+    <td>{{ c.studs.size_in | inches }} {{ c.studs.gauge }} ga @ {{ c.studs.spacing_in | inches }} o.c.</td>
+    <td>{% for l in c.layers_each_side %}{{ l.thickness_in | inches }} {{ l.board_type | board }}{% if not loop.last %} + {% endif %}{% endfor %}</td>
+    <td>{{ c.sides or "—" }}</td>
+    <td>{{ ("%g hr" % c.fire_rating) if c.fire_rating else "—" }}</td>
+    <td>{{ c.stc or "—" }}</td>
+    <td>{{ c.ul_assembly or "—" }}</td>
+    <td>{{ ("%g ft" % c.height_ft) if c.height_ft else "—" }}</td>
+    <td class="muted">{% set s = sheets.get((c.source or {}).get("sheet")) %}{{ s.sheet_no if s else "—" }}</td>
+    <td>{% set r = c.routing or {} %}<span class="model">{{ (r.model or "—").split("/")[-1] }}</span>{% if r.escalated %} <span class="badge esc" data-testid="condition-escalated">retried on Sonnet</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card empty" data-testid="conditions-empty">No conditions yet. They appear here as partition-type sheets are read.</div>
+{% endif %}
+{% endblock %}

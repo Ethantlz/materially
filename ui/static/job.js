@@ -33,18 +33,22 @@ function render(sheet) {
     cards.set(sheet.id, el);
     grid.appendChild(el);
   }
-  const key = JSON.stringify([sheet.thumb_path, sheet.sheet_no, sheet.title, sheet.scale?.label, sheet.scale?.source]);
+  const key = JSON.stringify([sheet.thumb_path, sheet.sheet_no, sheet.title, sheet.scale?.label, sheet.scale?.source, sheet.kind, sheet.routing]);
   if (el.dataset.key === key) return;
   el.dataset.key = key;
   const thumb = sheet.thumb_path
     ? `<img src="${sheet.thumb_path}" alt="" loading="lazy" data-full="${sheet.image_path}">`
     : `<div class="ph">rendering…</div>`;
   el.className = "sheet" + (sheet.kind === "partition_types" ? " hot" : "");
+  const r = sheet.routing;
+  const jev = !r ? "" : r.choice
+    ? `<span class="jev" data-testid="sheet-jev" title="Jev agreed twice with shuffled options">Jev ${Math.round(100 * (r.probabilities?.[r.choice] ?? 0))}%</span>`
+    : `<span class="jev warn" data-testid="sheet-jev" title="Jev's two answers disagreed; sent to review">Jev: review</span>`;
   el.innerHTML = `
     <div class="thumb">${thumb}</div>
     <div class="meta">
       <div class="row"><span class="no" data-testid="sheet-no">${esc(sheet.sheet_no || "—")}</span>
-        <span class="kind" data-testid="sheet-kind">${esc(KIND[sheet.kind] || sheet.kind)}</span></div>
+        <span>${jev} <span class="kind" data-testid="sheet-kind">${esc(KIND[sheet.kind] || sheet.kind)}</span></span></div>
       <div class="title" data-testid="sheet-title">${esc(sheet.title || "Untitled sheet")}</div>
       <div class="scale">${scaleSelect(sheet)}</div>
       <div class="muted small" data-testid="sheet-scale-source">${esc(scaleNote(sheet.scale))}</div>

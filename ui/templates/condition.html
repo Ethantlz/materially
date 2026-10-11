@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ c.type_tag }} · {{ job.name }}{% endblock %}
+{% block body %}
+<div class="pagehead">
+  <a class="back" href="/jobs/{{ job.id }}/conditions">← Conditions</a>
+  <h1><span class="tagchip big" data-testid="condition-tag">{{ c.type_tag }}</span>
+    {{ c.studs.size_in | inches }} {{ c.studs.gauge }} ga @ {{ c.studs.spacing_in | inches }}
+    {% if c.fire_rating %}<span class="badge">{{ "%g" % c.fire_rating }} hr</span>{% endif %}</h1>
+</div>
+
+<div class="cols">
+  <section class="card" data-testid="condition-fields">
+    <h2>Condition</h2>
+    <dl class="fields">
+      <dt>Studs</dt><dd>{{ c.studs.size_in | inches }}, {{ c.studs.gauge }} ga, {{ c.studs.spacing_in | inches }} o.c.</dd>
+      <dt>Board</dt><dd>{% for l in c.layers_each_side %}{{ l.thickness_in | inches }} {{ l.board_type | board }}{% if not loop.last %}, then {% endif %}{% endfor %} · {{ "each side" if c.sides == 2 else "one side" if c.sides == 1 else "sides —" }}</dd>
+      <dt>Insulation</dt><dd>{{ c.insulation or "—" }}</dd>
+      <dt>Fire rating</dt><dd>{{ ("%g hr" % c.fire_rating) if c.fire_rating else "not rated" }}</dd>
+      <dt>UL assembly</dt><dd>{{ c.ul_assembly or "—" }}</dd>
+      <dt>STC</dt><dd>{{ c.stc or "—" }}</dd>
+      <dt>Height</dt><dd>{{ ("%g ft" % c.height_ft) if c.height_ft else "to structure / not stated" }}</dd>
+      {% set r = c.routing or {} %}
+      <dt>Read by</dt><dd><span class="model">{{ r.model or "—" }}</span>{% if r.escalated %} <span class="badge esc">retried on Sonnet</span>{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section class="card" data-testid="condition-source">
+    <h2>Source sheet</h2>
+    {% if sheet %}
+    <p><b>{{ sheet.sheet_no }}</b> {{ sheet.title }} <span class="muted">· page {{ sheet.page }}</span></p>
+    {% if sheet.image_path %}
+    {% set bb = (c.source or {}).get("bbox") %}
+    <div class="srcimg">
+      <img src="{{ sheet.thumb_path or sheet.image_path }}" alt="{{ sheet.sheet_no }}" data-testid="condition-source-img">
+      {% if bb and sheet.size_pt %}
+      <div class="bbox" style="left:{{ 100 * bb[0] / sheet.size_pt[0] }}%;top:{{ 100 * bb[1] / sheet.size_pt[1] }}%;width:{{ 100 * (bb[2] - bb[0]) / sheet.size_pt[0] }}%;height:{{ 100 * (bb[3] - bb[1]) / sheet.size_pt[1] }}%"></div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% else %}<p class="muted">Source sheet not recorded.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card wide" data-testid="product-data">
+  <div class="row"><h2>Product data</h2>
+    <button class="ghost" id="procure" data-testid="procure-button">Find product data</button></div>
+  {% if products %}
+  <table class="tbl">
+    <thead><tr><th>Component</th><th>Product</th><th>Spec check (Jev)</th></tr></thead>
+    <tbody>
+    {% for p in products %}
+    <tr data-testid="product-row">
+      <td>{{ p.component }}</td>
+      <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.title or p.url }}</a>{% else %}{{ p.title or "—" }}{% endif %}
+        <div class="muted small">{% for k, v in (p.attrs or {}).items() %}{{ k }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
+      <td>{% for attr, pm in (p.spec_check or {}).items() %}
+        <span class="chk {{ 'bad' if pm > SPEC_FLAG else 'ok' }}" data-testid="spec-check" title="P(mismatch) = {{ '%.2f' % pm }}">{{ attr }} {{ "✗ mismatch" if pm > SPEC_FLAG else "✓" }}</span>
+      {% endfor %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No product data yet.</p>{% endif %}
+</section>
+
+<section class="card wide" data-testid="order-form-card">
+  <h2>Order this wall</h2>
+  <form id="order-form" class="inline" data-testid="order-form">
+    <label>Linear feet <input type="number" name="lf" min="1" step="any" required value="100" data-testid="order-lf"></label>
+    <label>Height (ft) <input type="number" name="height_ft" min="1" step="any" required value="{{ c.height_ft or 10 }}" data-testid="order-height"></label>
+    <button type="submit" data-testid="order-build">Build order</button>
+  </form>
+  {% if orders %}<p class="muted small">Earlier orders: {% for o in orders %}<a href="/orders/{{ o.id }}">{{ "%g" % o.lf }} LF · {{ o.total | money }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const CID = {{ c.id | tojson }};
+document.getElementById("order-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const r = await call("POST", API.buildOrder(), { job_id: JOB_ID, condition_id: CID, lf: +f.get("lf"), height_ft: +f.get("height_ft") });
+  const id = r.data && (r.data.order_id || r.data.id || r.data._id);
+  if (r.ok && id) location.href = "/orders/" + id; else toast(r.data?.detail || "Order failed", true);
+});
+document.getElementById("procure").addEventListener("click", async (e) => {
+  e.target.disabled = true; e.target.textContent = "Searching…";
+  const r = await call("POST", API.procure(CID));
+  if (r.ok) location.reload(); else { toast(r.data?.detail || "Product search failed", true); e.target.disabled = false; e.target.textContent = "Find product data"; }
+});
+</script>
+{% endblock %}

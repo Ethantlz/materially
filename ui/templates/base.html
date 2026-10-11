@@ -6,12 +6,28 @@
   <title>{% block title %}materially{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
   <header class="top">
     <a class="brand" href="/" data-testid="nav-home">materially</a>
+    {% if job %}
+    <span class="crumb" data-testid="nav-job">{{ job.name }}</span>
+    <nav class="tabs" data-testid="nav-tabs">
+      <a href="/jobs/{{ job.id }}" class="{{ 'on' if tab == 'sheets' }}" data-testid="tab-sheets">Sheets</a>
+      <a href="/jobs/{{ job.id }}/conditions" class="{{ 'on' if tab == 'conditions' }}" data-testid="tab-conditions">Conditions</a>
+      <a href="/jobs/{{ job.id }}/orders" class="{{ 'on' if tab == 'orders' }}" data-testid="tab-orders">Orders</a>
+      <a href="/jobs/{{ job.id }}/ewo" class="{{ 'on' if tab == 'ewo' }}" data-testid="tab-ewo">Field EWO</a>
+      <a href="/jobs/{{ job.id }}/pm" class="{{ 'on' if tab == 'pm' }}" data-testid="tab-pm">PM queue</a>
+      <a href="/review?job_id={{ job.id }}" class="{{ 'on' if tab == 'review' }}" data-testid="tab-review">Review</a>
+    </nav>
+    <span class="cost" id="cost" data-testid="cost-badge" title="Every model call on this job, logged in MongoDB"><b id="cost-n">·</b> AI decisions · <b id="cost-usd">$·</b></span>
+    {% else %}
     <span class="tag">takeoff</span>
+    <nav class="tabs"><a href="/review" class="{{ 'on' if tab == 'review' }}" data-testid="tab-review-all">Review queue</a></nav>
+    {% endif %}
   </header>
   <main>{% block body %}{% endblock %}</main>
+  <script src="/static/api.js"></script>
+  {% if job %}<script>window.JOB_ID = {{ job.id | tojson }}; costBadge(JOB_ID);</script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

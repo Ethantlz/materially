@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Field EWO · {{ job.name }}{% endblock %}
+{% block bodyclass %}phone{% endblock %}
+{% block body %}
+<div class="pagehead">
+  <h1>Extra work order</h1>
+  <p class="muted">Tap the drawing where the work is. The pin finds its room, and the PM sees a priced draft.</p>
+</div>
+{% if sheet %}
+<form id="ewo-form" class="ewo" data-testid="ewo-form">
+  <label>Sheet
+    <select id="sheet" data-testid="ewo-sheet">
+      {% for s in sheets %}<option value="{{ s.id }}" {{ "selected" if s.id == sheet.id }}>{{ s.sheet_no or ("Page %d" % s.page) }} · {{ s.title or "" }}</option>{% endfor %}
+    </select>
+  </label>
+  <div class="pinwrap" id="pinwrap" data-testid="ewo-sheet-image">
+    <img id="plan" src="{{ sheet.image_path }}" alt="{{ sheet.sheet_no }}">
+    <div class="pin" id="pin" hidden data-testid="ewo-pin"></div>
+  </div>
+  <p class="muted small" id="pinxy" data-testid="ewo-pin-xy">No pin yet. Tap the drawing.</p>
+  <label>Room
+    <select id="room" data-testid="ewo-room">
+      <option value="">Unknown / not in a room</option>
+      {% for r in rooms %}<option value="{{ r.id }}">{{ r.number or "" }} {{ r.name or "" }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>What's the extra work?
+    <textarea id="desc" rows="3" required placeholder="e.g. Owner added a 4 ft wall to close the alcove, full height, same as A1." data-testid="ewo-description"></textarea>
+  </label>
+  <button type="submit" id="submit" data-testid="ewo-submit">Send to PM</button>
+  <div class="sent" id="done" hidden data-testid="ewo-sent">✓ Sent. <a href="/jobs/{{ job.id }}/pm">Watch the PM queue</a></div>
+</form>
+{% else %}
+<div class="card empty" data-testid="ewo-empty">No rendered sheets yet. Upload a drawing set first.</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if sheet %}
+<script>
+const SHEET = {{ {"id": sheet.id, "size_pt": sheet.size_pt} | tojson }};
+const ROOMS = {{ rooms | tojson }};
+const img = document.getElementById("plan"), pin = document.getElementById("pin");
+const roomSel = document.getElementById("room");
+let pt = null;
+document.getElementById("sheet").addEventListener("change", (e) => (location.search = "?sheet=" + e.target.value));
+img.addEventListener("click", (e) => {
+  const r = img.getBoundingClientRect();
+  const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+  pt = [Math.round(fx * SHEET.size_pt[0] * 10) / 10, Math.round(fy * SHEET.size_pt[1] * 10) / 10];
+  pin.hidden = false; pin.style.left = 100 * fx + "%"; pin.style.top = 100 * fy + "%";
+  // Prefill the nearest room label; the server's $near makes the final call.
+  let best = null, bestD = Infinity;
+  for (const room of ROOMS) {
+    const d = Math.hypot(room.label_pt[0] - pt[0], room.label_pt[1] - pt[1]);
+    if (d < bestD) { best = room; bestD = d; }
+  }
+  roomSel.value = best && bestD < 400 ? best.id : "";
+  document.getElementById("pinxy").textContent = `Pin at ${pt[0]}, ${pt[1]} pt` + (best && bestD < 400 ? ` · near ${best.number || ""} ${best.name || ""}` : "");
+});
+document.getElementById("ewo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!pt) return toast("Tap the drawing to drop a pin first.", true);
+  const btn = document.getElementById("submit");
+  btn.disabled = true; btn.textContent = "Sending…";
+  const body = { job_id: JOB_ID, sheet: SHEET.id, x: pt[0], y: pt[1], description: document.getElementById("desc").value.trim(), room_id: roomSel.value || null };
+  const r = await call("POST", API.ewos(), body);
+  btn.disabled = false; btn.textContent = "Send to PM";
+  if (!r.ok) return toast(r.data?.detail || "Couldn't send the EWO", true);
+  document.getElementById("done").hidden = false;
+  document.getElementById("desc").value = ""; pin.hidden = true; pt = null;
+});
+</script>
+{% endif %}
+{% endblock %}

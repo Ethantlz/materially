@@ -15,7 +15,6 @@
 {% endblock %}
 {% block scripts %}
 <script>
-  window.JOB_ID = {{ job.id | tojson }};
   window.SCALE_LABELS = {{ scale_labels | safe }};
 </script>
 <script src="/static/job.js"></script>

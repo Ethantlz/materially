@@ -1,0 +1,17 @@
+<article class="draft {{ 'esc' if d.escalated }}" data-id="{{ d.id }}" data-testid="pm-draft">
+  <div class="row">
+    <span><span class="badge task" data-testid="pm-draft-task">{{ d.task | task }}</span>
+      {% if d.escalated %}<span class="badge esc" data-testid="pm-draft-escalated">escalated to Sonnet</span>{% endif %}</span>
+    <b class="total" data-testid="pm-draft-total">{{ d.total | money }}</b>
+  </div>
+  <p class="ewodesc">“{{ d.ewo.description or "—" }}”</p>
+  <p class="muted small">{% if d.room.number or d.room.name %}Room {{ d.room.number or "" }} {{ d.room.name or "" }} · {% endif %}{{ d.ewo.submitted_by or "foreman" }}{% if d.ewo.created_at %} · {{ d.ewo.created_at | clock }}{% endif %}</p>
+  {% if d.line_items %}
+  <table class="tbl mini">
+    {% for li in d.line_items %}<tr><td>{{ li.desc }}</td><td class="num">{{ "%g" % li.qty }} {{ li.unit }}</td><td class="num">{{ li.unit_cost | money }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+  {% if d.explanation %}<p class="small">{{ d.explanation }}</p>{% endif %}
+  {% set r = d.routing or {} %}
+  <p class="muted small">Routed by {{ (r.model or "Jev").split("/")[-1] }}{% if r.probabilities and r.choice %} ({{ "%d" % (100 * r.probabilities.get(r.choice, 0)) }}%){% endif %} · drafted by {{ (d.model or "—").split("/")[-1] }}</p>
+</article>

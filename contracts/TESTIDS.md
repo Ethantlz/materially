@@ -2,5 +2,90 @@
 
 Lane 3 appends one line per testid (append only; never rename). The demo script (H2) drives the UI with these.
 
-Format: `- <testid> | <page> | <what it is>`
+Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, `{order}` for ids.
+`(js)` marks an element that JavaScript renders after load; tests check those in `ui/static` or the page's script.
 
+- nav-home | / | brand link to the projects page
+- tab-review-all | / | review queue link when no job is open
+- upload-form | / | new project form
+- job-name | / | project name input
+- job-drop | / | PDF drop zone
+- job-files | / | PDF file input
+- job-upload | / | upload button
+- upload-error | / | upload error text
+- job-list | / | list of projects (only when one exists)
+- nav-job | /jobs/{job} | current job name in the header
+- nav-tabs | /jobs/{job} | job tabs
+- tab-sheets | /jobs/{job} | Sheets tab
+- tab-conditions | /jobs/{job} | Conditions tab
+- tab-orders | /jobs/{job} | Orders tab
+- tab-ewo | /jobs/{job} | Field EWO tab
+- tab-pm | /jobs/{job} | PM queue tab
+- tab-review | /jobs/{job} | Review tab
+- cost-badge | /jobs/{job} | header badge: AI decisions and cost for the job (refreshes every 8 s)
+- job-title | /jobs/{job} | job name heading
+- job-progress | /jobs/{job} | ingest progress bar
+- job-status | /jobs/{job} | ingest status text
+- sheet-grid | /jobs/{job} | sheet thumbnails
+- sheet-viewer | /jobs/{job} | full-size sheet dialog
+- viewer-close | /jobs/{job} | closes the sheet dialog
+- sheet-card | /jobs/{job} | one sheet (js)
+- sheet-no | /jobs/{job} | sheet number on a card (js)
+- sheet-kind | /jobs/{job} | sheet kind badge; partition sheets are highlighted (js)
+- sheet-jev | /jobs/{job} | Jev routing badge: confidence, or "review" when the two asks disagreed (js)
+- sheet-title | /jobs/{job} | sheet title (js)
+- sheet-scale | /jobs/{job} | scale picker (js)
+- sheet-scale-source | /jobs/{job} | where the scale came from (js)
+- conditions-table | /jobs/{job}/conditions | conditions library
+- condition-row | /jobs/{job}/conditions | one condition
+- condition-link | /jobs/{job}/conditions | type tag link to the condition
+- condition-escalated | /jobs/{job}/conditions | "retried on Sonnet" badge (only when escalated)
+- conditions-empty | /jobs/{job}/conditions | shown when there are no conditions
+- condition-tag | /conditions/{condition} | type tag heading
+- condition-fields | /conditions/{condition} | condition fields
+- condition-source | /conditions/{condition} | source sheet with the tag's box
+- condition-source-img | /conditions/{condition} | source sheet image (only when rendered)
+- product-data | /conditions/{condition} | product data section
+- procure-button | /conditions/{condition} | runs the product search (H1)
+- product-row | /conditions/{condition} | one product (only when product data exists)
+- spec-check | /conditions/{condition} | one spec check; red when P(mismatch) > 0.7
+- order-form-card | /conditions/{condition} | order section
+- order-form | /conditions/{condition} | LF + height form
+- order-lf | /conditions/{condition} | linear feet input
+- order-height | /conditions/{condition} | height input
+- order-build | /conditions/{condition} | builds the order (lane 2)
+- orders-table | /jobs/{job}/orders | orders list
+- order-row | /jobs/{job}/orders | one order
+- order-link | /jobs/{job}/orders | link to the order
+- orders-empty | /jobs/{job}/orders | shown when there are no orders
+- guard-warning | /orders/{order} | over-purchase warning (only when the guard trips)
+- guard-ok | /orders/{order} | guard passed (only when the guard ran clean)
+- order-lines | /orders/{order} | lines table
+- order-line | /orders/{order} | one line; red when over
+- order-line-qty | /orders/{order} | editable order qty (re-runs the guard)
+- order-total | /orders/{order} | order total
+- po-card | /orders/{order} | PO section
+- send-po | /orders/{order} | Send PO button (until sent)
+- po-sent | /orders/{order} | sent state (after sending)
+- ewo-form | /jobs/{job}/ewo | field EWO form (phone layout)
+- ewo-sheet | /jobs/{job}/ewo | sheet picker
+- ewo-sheet-image | /jobs/{job}/ewo | drawing to tap
+- ewo-pin | /jobs/{job}/ewo | dropped pin
+- ewo-pin-xy | /jobs/{job}/ewo | pin position and nearest room
+- ewo-room | /jobs/{job}/ewo | room dropdown, prefilled from the nearest label
+- ewo-description | /jobs/{job}/ewo | description
+- ewo-submit | /jobs/{job}/ewo | Send to PM
+- ewo-sent | /jobs/{job}/ewo | sent confirmation
+- ewo-empty | /jobs/{job}/ewo | shown when no sheet is rendered
+- pm-live | /jobs/{job}/pm | live status
+- pm-queue | /jobs/{job}/pm | drafts, newest first; new ones arrive live
+- pm-empty | /jobs/{job}/pm | shown when there are no drafts
+- pm-draft | /jobs/{job}/pm | one draft
+- pm-draft-task | /jobs/{job}/pm | task badge
+- pm-draft-total | /jobs/{job}/pm | draft total
+- pm-draft-escalated | /jobs/{job}/pm | escalated badge (only when escalated)
+- review-table | /review | review queue
+- review-row | /review | one item
+- review-reason | /review | why it's here
+- review-empty | /review | shown when the queue is empty
+- toast | /jobs/{job} | transient message (js)
