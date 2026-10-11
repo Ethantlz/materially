@@ -104,6 +104,7 @@ def test_jev_error_keeps_keyword_kind_and_queues_review(mock_db, job, named, mon
 def test_at_most_8_jev_calls_at_once(mock_db, job, named, monkeypatch):
     fake = Peak(lambda *a, **kw: agreed("other"))
     monkeypatch.setattr(jev, "choice", fake)
+    monkeypatch.setattr(router, "run_task", parsed)
     analyze.analyze(mock_db, job, list(named.values()) * 3)
     assert fake.peak == 8
 
@@ -130,6 +131,16 @@ def test_partition_sheet_becomes_conditions_and_plans_become_rooms(mock_db, job,
     plans = [str(named[no][0]["_id"]) for no in ("A-101", "A-102")]
     assert {k: sorted(v) for k, v in by_sheet.items()} == {sid: ["101", "102", "103"] for sid in plans}
     assert mock_db.jobs.find_one({"_id": oid(job)})["pages_sorted"] == 7
+
+
+def test_a_sheet_titled_partition_types_is_parsed_whatever_jev_says(mock_db, job, named, monkeypatch):
+    """Ottawa A001 is a cover page that carries the ASSEMBLY SCHEDULE: Jev calls it other, its title says otherwise."""
+    monkeypatch.setattr(jev, "choice", lambda *a, **kw: agreed("other"))
+    monkeypatch.setattr(router, "run_task", parsed)
+    analyze.analyze(mock_db, job, [named["A-501"], named["A-101"]])
+    assert mock_db.sheets.find_one({"_id": named["A-501"][0]["_id"]})["kind"] == "other"
+    assert sorted(c["type_tag"] for c in mock_db.conditions.find({"job_id": job})) == ["A1", "A2", "B1"]
+    assert mock_db.rooms.count_documents({"job_id": job}) == 0, "rooms follow the kind"
 
 
 def test_failed_parse_goes_to_review(mock_db, job, named, monkeypatch):

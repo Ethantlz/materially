@@ -1,4 +1,5 @@
 """After pass 1: Jev sorts each sheet, then partition sheets become conditions and floor plans become rooms.
+A sheet whose own title names partitions or assemblies is parsed whatever kind Jev gives it.
 
 This runs once the names are written (so the UI shows them at once) and updates the sheet docs in place.
 Sorting: jev.choice over SHEET_KINDS. Agreed -> kind and routing; disagreed or Jev down -> keep the
@@ -18,7 +19,7 @@ from app.db import insert_or_review, oid, to_review
 from contracts.schemas import SHEET_KINDS
 from extract.partitions import Block, partition_blocks
 from extract.rooms import find_rooms
-from extract.sheetinfo import PageText
+from extract.sheetinfo import PageText, guess_kind
 from extract.store import insert_all
 
 JEV_AT_ONCE = 8  # jev.choice calls in flight
@@ -30,8 +31,8 @@ QUESTION = "Which kind of drawing sheet is this?"
 # One line per kind, so Jev files sheets the way the title-keyword rules do (sections are elevations; site,
 # roof and cover sheets are other).
 KIND_OPTIONS = {
-    "partition_types": "partition types, wall types or wall assemblies",
-    "floor_plan": "floor plans and enlarged floor plans (not ceiling, roof or site plans)",
+    "partition_types": "partition types, wall types, wall assemblies or an assembly schedule, also on a cover sheet",
+    "floor_plan": "floor plans: new work, demolition, finish, furniture and enlarged plans (not ceiling, roof or site)",
     "reflected_ceiling": "reflected ceiling plans (RCP)",
     "elevations": "exterior or interior elevations, building or wall sections",
     "details": "construction details",
@@ -128,7 +129,8 @@ def analyze(db: Database, job_id: str, items: list[tuple[dict, PageText]]) -> No
             kind = done.result()
             if kind == "floor_plan":
                 add_rooms(db, job_id, sheet, page)
-            elif kind == "partition_types":
+            elif kind == "partition_types" or guess_kind(sheet.get("title")) == "partition_types":
+                # a cover page carrying the ASSEMBLY SCHEDULE is "other" to Jev; its title still says partition types
                 parsing += [parsers.submit(parse_block, db, job_id, sheet, b) for b in partition_blocks(page)]
         for f in parsing:
             f.result()
