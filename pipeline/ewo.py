@@ -14,6 +14,7 @@ from app import jev
 from app.db import get_db, insert_or_review, is_mock, now, oid, to_review
 from app.router import TaskFailed, run_task
 from contracts.validate import validate
+from orders import math as order_math
 
 log = logging.getLogger("materially.ewo")
 
@@ -96,8 +97,8 @@ def _price_items(conditions: list[dict]) -> list[str]:
     items = list(GENERIC_ITEMS)
     for c in conditions:
         studs = c.get("studs") or {}
-        if studs.get("size_in") is not None and studs.get("gauge") is not None:
-            size, gauge = studs["size_in"], studs["gauge"]
+        if studs.get("size_in") is not None:
+            size, gauge = studs["size_in"], studs.get("gauge") or order_math.CONSTANTS["default_gauge"]  # None: not on the drawings
             items += [f"stud_{size:g}_{gauge}ga_{n}ft" for n in STUD_LENGTHS] + [f"track_{size:g}_{gauge}ga_10ft"]
         for layer in c.get("layers_each_side") or []:
             items += [f"board_{layer['thickness_in']:g}_{layer['board_type']}_4x{n}" for n in BOARD_LENGTHS]

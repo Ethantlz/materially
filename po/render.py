@@ -14,7 +14,7 @@ h1{font-size:22px;margin:0 0 4px}.muted{color:#5b6570}
 .meta b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5b6570;font-weight:600}
 table{border-collapse:collapse;width:100%}th,td{padding:7px 10px;border-bottom:1px solid #e3e6ea;text-align:left}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5b6570}.num{text-align:right;font-variant-numeric:tabular-nums}
-tfoot td{border-bottom:0;font-weight:700;font-size:15px}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+tfoot td{border-bottom:0;font-weight:700;font-size:15px}.assumed{color:#9a6700;font-size:12px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}
 """
 
 
@@ -35,13 +35,18 @@ def job_name(db, order: dict) -> str:
     return (job or {}).get("name") or order["job_id"]
 
 
+def assumed_mark(line: dict) -> str:
+    """"(assumed)" after an item whose size depends on something the drawings don't state."""
+    return ' <span class="assumed" title="{}">(assumed)</span>'.format(escape("; ".join(line["assumed"]), quote=True)) if line.get("assumed") else ""
+
+
 def render(order_id: str) -> str:
     db = get_db()
     order = db.orders.find_one({"_id": oid(order_id)}) if oid(order_id) else None
     if order is None:
         raise LookupError(f"no such order: {order_id!r}")
     rows = "".join(
-        f'<tr><td class="mono">{escape(str(l["item"]))}</td><td class="num">{number(l["qty"])}</td><td>{escape(str(l.get("unit") or ""))}</td>'
+        f'<tr><td class="mono">{escape(str(l["item"]))}{assumed_mark(l)}</td><td class="num">{number(l["qty"])}</td><td>{escape(str(l.get("unit") or ""))}</td>'
         f'<td class="num">{money(l.get("unit_cost"))}</td><td class="num">{money(None if l.get("unit_cost") is None else l["qty"] * l["unit_cost"])}</td></tr>'
         for l in order["lines"]
     )
@@ -50,6 +55,8 @@ def render(order_id: str) -> str:
     created = order.get("created_at")
     height = f" x {number(order['height_ft'])} ft" if order.get("height_ft") else ""
     name = escape(job_name(db, order))
+    notes = list(dict.fromkeys(note for l in order["lines"] for note in l.get("assumed") or []))
+    footnote = f'<p class="muted">(assumed) not on the drawings: {escape("; ".join(notes))}</p>' if notes else ""
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>{po_number(order)} - {name}</title><style>{STYLE}</style></head>
 <body data-testid="po-preview">
@@ -66,5 +73,6 @@ def render(order_id: str) -> str:
 <tbody>{rows}</tbody>
 <tfoot><tr><td colspan="4" class="num">Total</td><td class="num">{money(order.get("total"))}</td></tr></tfoot>
 </table>
+{footnote}
 </body></html>
 """

@@ -63,8 +63,9 @@ Need: in `contracts/seed.py`, price_book rows for stud/track gauges 22, 14, 12 a
 or a decision that those items stay unpriced. Today `orders.math` emits `stud_3.625_22ga_10ft` for a 22 ga condition and the
 `$lookup` finds nothing.
 Why: a partition parsed with a gauge the price book lacks produces unpriced lines (total counts only priced ones).
-Workaround in place: unknown items keep `unit_cost: null`, are listed in the `unpriced` field of the order responses, and the PO shows "unpriced".
-Status: open
+Workaround in place (now the decision): unknown items keep `unit_cost: null`, are listed in the `unpriced` field of the order responses, and the PO shows "unpriced".
+Decision (integrator, 14:50): leave those gauges unpriced for today; no seed change.
+Status: closed
 
 ### integrator · 15:00 · gauge and spacing are now nullable (contracts ccd8e78)
 Need (lane 2): `orders.math.lines_for` must accept `studs.gauge: null` and `studs.spacing_in: null`. The demo set (WCU A003)
@@ -72,3 +73,12 @@ gives stud size, rating and STC but leaves gauge to the specs. Use a default fro
 shaft-wall C-H studs) and mark the line as assumed, so the order and PO say "20 ga (assumed)".
 Why: without it every WCU condition prices as `stud_3.625_Nonega_10ft` (unpriced).
 Status: open
+
+### pipeline · 14:55 · lines now carry `assumed` when the drawings don't give gauge or spacing
+Need: nothing from you; this answers the integrator 15:00 entry above (it can be closed). For lane 3: an order line from `orders.math` may have `assumed`, a list of strings such as
+`["gauge 20 (not on drawings)", "spacing 24 in o.c. (shaft wall, not on drawings)"]` (studs carry gauge and spacing, track carries
+gauge; other lines have no key). The PO already prints "(assumed)" after those items with a footnote; the order page can do the same
+from `l.assumed`. Defaults live in `orders/math.py` CONSTANTS (`default_gauge` 20, `default_spacing_in` 16, `shaft_spacing_in` 24; a shaft
+wall is a type_tag starting with SH or a shaftliner layer).
+Workaround in place: none needed.
+Status: info

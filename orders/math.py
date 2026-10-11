@@ -12,6 +12,13 @@ Every number is in CONSTANTS. These are placeholders: swap in your own and nothi
 import math
 
 CONSTANTS = {
+    # What a partition schedule often leaves out (gauge and spacing live in the specs). The order uses these and
+    # marks every line they touch with `assumed`, so the order page and the PO say so.
+    "default_gauge": 20,
+    "default_spacing_in": 16,
+    "shaft_spacing_in": 24,  # shaft walls are framed wider
+    "shaft_tag_prefix": "SH",  # a type_tag starting with this is a shaft wall ...
+    "shaft_board_types": ("shaftliner",),  # ... and so is any condition with a layer of one of these
     # Studs: ceil(LF x 12 / spacing_in) + 1, cut from the shortest stock length that reaches the wall height.
     "stud_stock_lengths_ft": (8, 9, 10, 12, 14, 16),
     "stud_extra": 1,
@@ -63,27 +70,45 @@ def _has_insulation(condition: dict) -> bool:
     return str(condition.get("insulation") or "").strip().lower() not in K["no_insulation_words"]
 
 
+def is_shaft_wall(condition: dict) -> bool:
+    tag = str(condition.get("type_tag") or "").strip().upper()
+    boards = {layer.get("board_type") for layer in condition.get("layers_each_side") or []}
+    return tag.startswith(K["shaft_tag_prefix"]) or bool(boards & set(K["shaft_board_types"]))
+
+
 def lines_for(condition: dict, lf: float, height_ft: float) -> list[dict]:
-    try:
-        studs, layers = condition["studs"], condition["layers_each_side"]
-        size, gauge, spacing = studs["size_in"], studs["gauge"], studs["spacing_in"]
-    except (KeyError, TypeError):
-        raise ValueError("condition needs studs {size_in, gauge, spacing_in} and layers_each_side") from None
-    if not layers:
-        raise ValueError("condition has no layers_each_side")
+    """gauge or spacing_in may be None (the drawings often don't say): the defaults in CONSTANTS are used and the
+    lines that depend on them carry `assumed`, a list of what was assumed, e.g. ["gauge 20 (not on drawings)"]."""
+    studs, layers = condition.get("studs") or {}, condition.get("layers_each_side")
+    size = studs.get("size_in")
+    if size is None or not layers:
+        raise ValueError("condition needs studs.size_in and layers_each_side")
     sides = condition.get("sides") or 2
     waste = K["waste"]
 
-    lines = [
-        _line(
-            f"stud_{size:g}_{gauge}ga_{_stock(height_ft, K['stud_stock_lengths_ft'])}ft", "ea",
-            math.ceil(lf * 12 / spacing - 1e-9) + K["stud_extra"], waste["stud"],
-        ),
-        _line(
-            f"track_{size:g}_{gauge}ga_{K['track_length_ft']}ft", "ea",
-            math.ceil(lf * K["track_runs"] / K["track_length_ft"] - 1e-9), waste["track"],
-        ),
-    ]
+    gauge, gauge_note = studs.get("gauge"), []
+    if gauge is None:
+        gauge = K["default_gauge"]
+        gauge_note = [f"gauge {gauge} (not on drawings)"]
+    spacing, spacing_note = studs.get("spacing_in"), []
+    if spacing is None:
+        shaft = is_shaft_wall(condition)
+        spacing = K["shaft_spacing_in"] if shaft else K["default_spacing_in"]
+        spacing_note = [f"spacing {spacing:g} in o.c. ({'shaft wall, ' if shaft else ''}not on drawings)"]
+
+    stud = _line(
+        f"stud_{size:g}_{gauge}ga_{_stock(height_ft, K['stud_stock_lengths_ft'])}ft", "ea",
+        math.ceil(lf * 12 / spacing - 1e-9) + K["stud_extra"], waste["stud"],
+    )
+    track = _line(
+        f"track_{size:g}_{gauge}ga_{K['track_length_ft']}ft", "ea",
+        math.ceil(lf * K["track_runs"] / K["track_length_ft"] - 1e-9), waste["track"],
+    )
+    if gauge_note or spacing_note:
+        stud["assumed"] = gauge_note + spacing_note
+    if gauge_note:
+        track["assumed"] = gauge_note
+    lines = [stud, track]
 
     sheet_len = _stock(height_ft, K["board_stock_lengths_ft"])
     sheet_sf = K["board_sheet_width_ft"] * sheet_len

@@ -253,3 +253,8 @@ def test_routed_ewo_inserts_a_draft_live(live_db, live_job, client):
     assert by_id(live_db.ewos, ewo_id)["status"] == "drafted"
     cost = client.get(f"/api/jobs/{live_job}/cost").json()
     assert cost["calls"] >= 3 and {t["task"] for t in cost["by_task"]} >= {"ewo_route", draft["task"]}
+
+
+def test_price_rows_for_a_wall_without_a_gauge_use_the_default_gauge():
+    items = ewo._price_items([{"studs": {"size_in": 3.625, "gauge": None, "spacing_in": None}, "layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}]}])
+    assert "stud_3.625_20ga_10ft" in items and "track_3.625_20ga_10ft" in items and "board_0.625_type_x_4x10" in items
