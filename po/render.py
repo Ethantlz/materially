@@ -6,6 +6,7 @@ from html import escape
 
 from app.db import get_db, oid
 from contracts.seed import SUPPLIER
+from ui.common import item_label
 
 STYLE = """
 body{font:14px/1.45 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1b1f24;margin:0;padding:32px;background:#fff}
@@ -14,7 +15,7 @@ h1{font-size:22px;margin:0 0 4px}.muted{color:#5b6570}
 .meta b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5b6570;font-weight:600}
 table{border-collapse:collapse;width:100%}th,td{padding:7px 10px;border-bottom:1px solid #e3e6ea;text-align:left}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5b6570}.num{text-align:right;font-variant-numeric:tabular-nums}
-tfoot td{border-bottom:0;font-weight:700;font-size:15px}.assumed{color:#9a6700;font-size:12px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+tfoot td{border-bottom:0;font-weight:700;font-size:15px}.assumed{color:#9a6700;font-size:12px}.spec{color:#5b6570;margin-left:6px}
 """
 
 
@@ -40,13 +41,19 @@ def assumed_mark(line: dict) -> str:
     return ' <span class="assumed" title="{}">(assumed)</span>'.format(escape("; ".join(line["assumed"]), quote=True)) if line.get("assumed") else ""
 
 
+def item_cell(line: dict) -> str:
+    """The item as the order page names it: Steel stud 3-5/8" · 20 ga · 10 ft, not the price-book key."""
+    name, spec = item_label(line["item"])
+    return escape(name, quote=False) + (f' <span class="spec">{escape(spec, quote=False)}</span>' if spec else "") + assumed_mark(line)
+
+
 def render(order_id: str) -> str:
     db = get_db()
     order = db.orders.find_one({"_id": oid(order_id)}) if oid(order_id) else None
     if order is None:
         raise LookupError(f"no such order: {order_id!r}")
     rows = "".join(
-        f'<tr><td class="mono">{escape(str(l["item"]))}{assumed_mark(l)}</td><td class="num">{number(l["qty"])}</td><td>{escape(str(l.get("unit") or ""))}</td>'
+        f'<tr><td>{item_cell(l)}</td><td class="num">{number(l["qty"])}</td><td>{escape(str(l.get("unit") or ""))}</td>'
         f'<td class="num">{money(l.get("unit_cost"))}</td><td class="num">{money(None if l.get("unit_cost") is None else l["qty"] * l["unit_cost"])}</td></tr>'
         for l in order["lines"]
     )

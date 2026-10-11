@@ -224,17 +224,17 @@ function renderToolbar() {
 
 function condRow(c, i) {
   const tag = esc(c.type_tag), sub = !!c.parent_id;  // a sub-condition is the parent's wall type at another height
-  const nm = esc(sub ? shortName(c).replace(/\s@\s[\d.]+'$/, "") : shortName(c));  // a height shows its height instead of repeating it
   const src = c.source && c.source.sheet ? sheetById(c.source.sheet) : null;
   const open = S.open === c.id;
   const rowId = sub ? 'data-testid="cond-sub-row"' : 'data-testid="cond-row"';
+  // the build (stud, board …) is in the hover title and the ▸ materials list, so the row is just the tag and its numbers
   const head = sub
-    ? `<b class="ctag" data-testid="cond-tag">${tag}</b><span class="chgt" title="${tag} at ${esc(c.height_ft)} ft">@ ${esc(+c.height_ft)}'</span><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span>`
-    : `<b class="ctag" data-testid="cond-tag">${tag}</b><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span>`;
+    ? `<b class="ctag" data-testid="cond-tag" title="${esc(c.name)}">${tag}</b><span class="chgt" title="${tag} at ${esc(c.height_ft)} ft">@ ${esc(+c.height_ft)}'</span>`
+    : `<b class="ctag" data-testid="cond-tag" title="${esc(c.name)}">${tag}</b>`;
   return `<div class="crow ${sub ? "sub" : ""} ${c.id === S.condId ? "active" : ""}" data-cid="${c.id}" ${rowId} style="--c:${esc(c.color)}" role="button" tabindex="0" aria-pressed="${c.id === S.condId}">
     <span class="cswatch" data-testid="cond-swatch"></span>
-    <div><div class="ctop">${head}</div>
-      <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div>
+    <div><div class="ctop">${head}
+      <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div></div>
       ${sub ? "" : addHeightHtml(c)}
       ${open ? materialsHtml(c) : ""}</div>
     <div class="cside"><button type="button" class="btn-ghost sm" data-expand="${c.id}" data-testid="cond-expand" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the materials ${tag} is built from" title="${open ? "Hide" : "Show"} the materials this type is built from">${open ? "▾" : "▸"}</button><span class="cactive" data-testid="cond-active">ACTIVE</span>

@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>{% block title %}materially{% endblock %}</title>
+  <title>{% block title %}Materially{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <link rel="stylesheet" href="/static/app.css">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
   <header class="top">
-    <a class="brand" href="/" data-testid="nav-home"><span class="mark">m</span>materially</a>
+    <a class="brand" href="/" data-testid="nav-home"><img class="mark" src="/static/logo.svg" alt="">Materially</a>
     {% if job %}<span class="faint">/</span><a class="crumb" href="/jobs/{{ job.id }}/takeoff" data-testid="nav-job" title="{{ job.name }}">{{ job.name }}</a>{% endif %}
     <span class="spacer"></span>
     {% block bar %}{% endblock %}

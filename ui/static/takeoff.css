@@ -106,20 +106,20 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--accent)
 .phead h2 { margin: 0; flex: 1 1 100%; }  /* the title takes its own row, so the two buttons stay on one row */
 .phead button { flex: 0 0 auto; }
 .clist { padding: 6px 0 18px; flex: 1; overflow-y: auto; min-height: 0; }
-.crow { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 11px; padding: 9px 12px 9px 0; margin: 0; cursor: pointer; border-bottom: 1px solid var(--line); position: relative; outline: 0; }
+.crow { display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; gap: 10px; padding: 6px 10px 6px 0; margin: 0; cursor: pointer; border-bottom: 1px solid var(--line); position: relative; outline: 0; }
 .cswatch { background: var(--c); border-radius: 0 3px 3px 0; }
 .crow:hover { background: var(--surface2); }
 .crow:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .crow.active { background: var(--accent-soft); }
 .crow.active::after { content: ""; position: absolute; inset: 0; border: 1.5px solid var(--accent); pointer-events: none; }
-.ctop { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.ctag { font-size: 15px; font-weight: 700; min-width: 34px; }
-.cname { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.cnums { display: flex; gap: 14px; margin-top: 5px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.cnums b { font-size: 14px; color: var(--ink); font-weight: 600; margin-right: 2px; }
+.ctop { display: flex; align-items: baseline; gap: 8px; min-width: 0; min-height: 22px; }
+.ctag { font-size: 14px; font-weight: 700; min-width: 34px; }
+.cnums { display: flex; gap: 10px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cnums b { font-size: 13px; color: var(--ink); font-weight: 600; margin-right: 2px; }
 .cnums .zero b { color: var(--faint); font-weight: 500; } .cnums .zero { color: var(--faint); }
 .cnums .ticking b { color: var(--accent); }
-.cside { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 4px; }
+.cside { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 2px; }
+.cside .btn-ghost.sm { height: 22px; padding: 0 6px; }
 .cactive { font: 600 9.5px system-ui; letter-spacing: .08em; color: var(--accent); display: none; }
 .crow.active .cactive { display: block; }
 .csrc { height: auto; background: transparent; color: var(--accent); border: 0; padding: 0; font: 500 11.5px system-ui; border-radius: 4px; }
@@ -148,9 +148,9 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--accent)
 .mat { padding: 6px 10px; }
 
 /* sub-conditions: a wall type at another height, indented under its parent */
-.crow.sub { margin-left: 16px; padding-top: 7px; padding-bottom: 7px; border-left: 1px solid var(--line); }
+.crow.sub { margin-left: 16px; padding-top: 4px; padding-bottom: 4px; border-left: 1px solid var(--line); }
 .chgt { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.crow button.caddh { height: 22px; padding: 0 6px; margin: 3px 0 0 -6px; font-size: 11.5px; color: var(--accent); }
+.crow button.caddh { height: 20px; padding: 0 6px; margin: 1px 0 0 -6px; font-size: 11.5px; color: var(--accent); }
 .hform { display: flex; align-items: center; gap: 6px; margin-top: 5px; cursor: default; }
 .hform input { width: 64px; height: 28px; padding: 0 7px; font-size: 12.5px; }
 .hform button { flex: none; height: 28px; }

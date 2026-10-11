@@ -33,6 +33,41 @@ def inches(v) -> str:
     return f'{frac.numerator}/{frac.denominator}"' if not whole else f'{whole}-{frac.numerator}/{frac.denominator}"'
 
 
+# price_book item keys (contracts/seed.py) as an estimator reads them on the order page.
+_ITEM_NAMES = {
+    "mud_all_purpose": ("Joint compound", "All-purpose"), "mud_setting_45": ("Setting compound", "45 min"),
+    "tape_paper_500ft": ("Paper joint tape", "500 ft roll"),
+    "sealant_acoustical_28oz": ("Acoustical sealant", "28 oz"), "sealant_firerated_10oz": ("Fire-rated sealant", "10 oz"),
+}
+_ITEM_PATTERNS = [
+    (r"stud_([\d.]+)_(\d+)ga_(\d+)ft", lambda s, g, n: ("Steel stud", f"{inches(float(s))} · {g} ga · {n} ft")),
+    (r"track_([\d.]+)_(\d+)ga_(\d+)ft", lambda s, g, n: ("Track", f"{inches(float(s))} · {g} ga · {n} ft")),
+    (r"board_([\d.]+)_(\w+)_4x(\d+)", lambda t, b, n: ("Gypsum board", f"{inches(float(t))} {BOARD_LABELS.get(b, b)} · 4×{n} ft")),
+    (r"screws_([\d.]+)in", lambda s: ("Drywall screws", inches(float(s)))),
+    (r"insulation_batt_([\d.]+)in", lambda s: ("Batt insulation", inches(float(s)))),
+    (r"corner_bead_(\d+)ft", lambda n: ("Corner bead", f"{n} ft")),
+    (r"resilient_channel_(\d+)ga_(\d+)ft", lambda g, n: ("Resilient channel", f"{g} ga · {n} ft")),
+    (r"labor_(\w+)_hr", lambda k: ("Labor", k.capitalize())),
+]
+
+
+def item_label(key: str | None) -> tuple[str, str]:
+    """stud_3.625_20ga_10ft -> ("Steel stud", '3-5/8" · 20 ga · 10 ft'). A key outside the price book reads as words."""
+    key = str(key or "")
+    if key in _ITEM_NAMES:
+        return _ITEM_NAMES[key]
+    for pattern, label in _ITEM_PATTERNS:
+        if m := re.fullmatch(pattern, key):
+            return label(*m.groups())
+    words = key.replace("_", " ").strip()
+    return (words[:1].upper() + words[1:], "")
+
+
+def item_text(key: str | None) -> str:
+    """The item on one line, for lists: Steel stud 3-5/8" · 20 ga · 10 ft."""
+    return " ".join(p for p in item_label(key) if p)
+
+
 def reason_summary(reason: str) -> str:
     """One readable line from MongoDB's 'Document failed validation: {details}' (insert_or_review's reason).
     Other reasons pass through unchanged."""

@@ -15,7 +15,7 @@ from extract.scale import COMMON_LABELS
 from projects.alternates import list_alternates, project_rows, scope
 from ui import standins
 from ui.common import (  # noqa: F401  (inches and reason_summary are re-exported for the tests)
-    BOARD_LABELS, PALETTE, condition_views, discipline, inches, next_color, reason_summary, stud_text,
+    BOARD_LABELS, PALETTE, condition_views, discipline, inches, item_label, item_text, next_color, reason_summary, stud_text,
 )
 
 router = APIRouter(tags=["ui"])
@@ -42,7 +42,7 @@ def clock(v) -> str:
 
 
 templates.env.filters.update(
-    inches=inches, money=money, clock=clock, studs=stud_text,
+    inches=inches, money=money, clock=clock, studs=stud_text, item=item_label, item_text=item_text,
     board=lambda b: BOARD_LABELS.get(b, b or "—"), task=lambda t: TASK_LABELS.get(t, t),
     kind=lambda k: KIND_LABELS.get(k, k or "—"),
 )

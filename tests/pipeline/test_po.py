@@ -7,6 +7,7 @@ from app.db import now
 from pipeline import orders
 from po.send import DEFAULT_TO
 from tests.pipeline.conftest import add_condition, by_id, new_id
+from ui.common import item_label
 
 
 @pytest.fixture
@@ -22,7 +23,8 @@ def test_render_shows_job_supplier_lines_and_total(db, job, order_id):
     assert "Sample &lt;Clinic&gt; Fit-Out" in html and "<Clinic>" not in html  # escaped
     assert "Sample Supply Co" in html and f"PO-{order_id[-6:].upper()}" in html and "A1, 100 LF x 10 ft" in html
     for l in order["lines"]:
-        assert l["item"] in html
+        name, spec = item_label(l["item"])
+        assert name in html and spec in html and l["item"] not in html  # the supplier reads names, not price-book keys
     stud = next(l for l in order["lines"] if l["item"] == "stud_3.625_20ga_10ft")
     assert f"${stud['qty'] * stud['unit_cost']:,.2f}" in html and "$10.15" in html  # unit cost and extension
     assert f"${order['total']:,.2f}" in html
@@ -69,7 +71,7 @@ def test_unknown_order(db):
 def test_po_routes(db, job, order_id, client):
     r = client.get(f"/api/orders/{order_id}/po")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
-    assert "Sample Supply Co" in r.text and "stud_3.625_20ga_10ft" in r.text
+    assert "Sample Supply Co" in r.text and "Steel stud" in r.text
 
     sent = client.post(f"/api/orders/{order_id}/send")
     assert sent.status_code == 200, sent.text
@@ -92,5 +94,5 @@ def test_the_po_prints_assumed_next_to_lines_sized_on_an_assumption(db, job):
     html = po.render(orders.build(job, sa4, 100, 10))
 
     assert html.count('class="assumed"') == 2  # studs and track
-    assert "stud_3.625_20ga_10ft <span" in html and "(assumed)" in html
+    assert '3-5/8" · 20 ga · 10 ft</span> <span class="assumed"' in html and "(assumed)" in html
     assert "gauge 20 (not on drawings)" in html and "unpriced" not in html

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.db import get_db
 from app.main import app
 from contracts.samples import CONDITION_ID, DRAFT_ID, JOB_ID, ORDER_ID, SAMPLES, SHEET_PT_ID
-from ui.api import inches
+from ui.api import inches, item_label
 
 ROOT = Path(__file__).resolve().parents[2]
 EMPTY_JOB = ObjectId()
@@ -153,6 +153,21 @@ def test_pages_show_the_key_numbers(client):
 @pytest.mark.parametrize("value,text", [(3.625, '3-5/8"'), (0.625, '5/8"'), (6, '6"'), (2.5, '2-1/2"'), (None, "—")])
 def test_inches(value, text):
     assert inches(value) == text
+
+
+@pytest.mark.parametrize("key,label", [
+    ("stud_3.625_20ga_10ft", ("Steel stud", '3-5/8" · 20 ga · 10 ft')),
+    ("track_3.625_20ga_10ft", ("Track", '3-5/8" · 20 ga · 10 ft')),
+    ("board_0.625_type_x_4x10", ("Gypsum board", '5/8" Type X · 4×10 ft')),
+    ("board_0.5_type_x_mold_resistant_4x12", ("Gypsum board", '1/2" Type X mold resistant · 4×12 ft')),
+    ("screws_1.25in", ("Drywall screws", '1-1/4"')),
+    ("mud_all_purpose", ("Joint compound", "All-purpose")),
+    ("tape_paper_500ft", ("Paper joint tape", "500 ft roll")),
+    ("insulation_batt_3.5in", ("Batt insulation", '3-1/2"')),
+    ("something_new", ("Something new", "")),
+])
+def test_item_label(key, label):
+    assert item_label(key) == label
 
 
 @pytest.mark.parametrize("path,tid", [
