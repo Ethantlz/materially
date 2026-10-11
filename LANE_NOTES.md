@@ -14,7 +14,6 @@ Status: open
 
 ## Entries
 
-<<<<<<< HEAD
 ### extract · 14:31 · merge notes (no app/ or contracts/ changes needed)
 - **`tests/test_upload_flow.py`** (shared file): it now asserts `scale_source`, and sets `MONGODB_URI`, `DB_NAME`,
   `DATA_DIR` and blank model keys per test with `monkeypatch`. It used to set `MONGODB_URI=mongomock://` at import,
