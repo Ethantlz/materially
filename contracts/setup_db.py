@@ -22,7 +22,7 @@ from contracts.seed import MODEL_POLICY, price_book
 from contracts.validate import validate
 
 ALL_DBS = ["lane1", "lane2", "lane3", "h1", "h2", "demo"]
-UNIQUE_KEYS = {"model_policy": "task", "product_data": "query_hash", "price_book": "item"}
+UNIQUE_KEYS = {"model_policy": "task", "product_data": "query_hash", "price_book": "item", "alternates": "name"}
 
 
 def ensure_schema(db: Database) -> None:

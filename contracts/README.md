@@ -23,6 +23,10 @@ Only the integrator edits `app/` and `contracts/`. If a lane needs a change here
 - `measurements` is one takeoff line on a sheet: `points` in PDF points, `quantity` in `unit` (lf / sf / ea)
   computed with the sheet's `scale.pt_per_ft`, which is stored on the doc. Total LF per condition is a
   `$group` over measurements; that LF feeds `pipeline.orders.build`.
+- `alternates` split a project's takeoff: Base bid (kind `base`, made on first use) plus named alternates. Drawings and
+  conditions belong to the project; `measurements.alternate_id` and `orders.alternate_id` belong to one alternate.
+  A missing `alternate_id` means Base bid.
+- `conditions.materials[]` lists what a wall type is built from (`MATERIAL` in schemas.py), built by `extract.materials.derive`.
 
 ## Shared calls
 ```python

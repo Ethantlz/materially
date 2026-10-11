@@ -23,6 +23,7 @@ EWO_ID = _oid("e1")
 DRAFT_ID = _oid("e2")
 ORDER_ID = _oid("f1")
 PRODUCT_ID = _oid("f2")
+ALT_ID = _oid("a2")
 
 JEV_ROUTING = {
     "choice": "partition_types",
@@ -65,6 +66,12 @@ SAMPLES: dict[str, dict] = {
         "height_ft": 10,
         "source": {"sheet": str(SHEET_PT_ID), "page": 4, "bbox": [612.0, 140.5, 790.2, 260.0]},
         "routing": {"task": "parse_partition", "model": "deepseek-ai/DeepSeek-V4.1-Flash", "escalated": False},
+        "materials": [
+            {"key": "stud", "role": "stud", "desc": '3-5/8" 20 ga metal studs @ 16" o.c.', "size_in": 3.625, "gauge": 20, "spacing_in": 16, "per": "lf", "source": "drawing"},
+            {"key": "track", "role": "track", "desc": '3-5/8" 20 ga track, top and bottom', "size_in": 3.625, "gauge": 20, "per": "lf", "source": "derived"},
+            {"key": "board_0.625_type_x", "role": "board", "desc": '5/8" Type X gypsum board, 1 layer each side', "thickness_in": 0.625, "board_type": "type_x", "sides": 2, "per": "sf", "source": "drawing"},
+            {"key": "insulation", "role": "insulation", "desc": '3-1/2" sound attenuation batts', "size_in": 3.625, "per": "sf", "source": "drawing"},
+        ],
     },
     "rooms": {
         "_id": ROOM_ID,
@@ -169,6 +176,7 @@ SAMPLES: dict[str, dict] = {
         "reason": "studs.gauge: 19 not one of [12, 14, 16, 18, 20, 22, 25, 30]",
         "at": AT,
     },
+    "alternates": {"_id": ALT_ID, "job_id": str(JOB_ID), "name": "Base bid", "kind": "base", "description": None, "order": 0, "created_at": AT},
 }
 
 # A parse the validator must reject (bad gauge, no layers): used by setup's self-check and tests.

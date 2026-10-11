@@ -39,6 +39,27 @@ BOARD_TYPES = [
 TIERS = ["decide", "quick", "expert"]
 EWO_STATUSES = ["new", "routed", "drafted", "review", "approved", "rejected"]
 
+MATERIAL_ROLES = ["stud", "track", "board", "insulation", "resilient_channel", "furring", "sealant", "fastener", "bracing", "other"]
+_GAUGE_OR_NULL = {"enum": [g for g in GAUGES if g is not None] + [None]}
+MATERIAL = {  # one thing a wall type is built from (extract/materials.py builds these)
+    "bsonType": "object",
+    "required": ["key", "role", "desc"],
+    "properties": {
+        "key": {"bsonType": "string", "minLength": 1, "maxLength": 60},  # unique within the condition
+        "role": {"enum": MATERIAL_ROLES},
+        "desc": {"bsonType": "string", "minLength": 1},
+        "size_in": {"bsonType": ["number", "null"]},
+        "gauge": _GAUGE_OR_NULL,
+        "spacing_in": {"bsonType": ["number", "null"]},
+        "thickness_in": {"bsonType": ["number", "null"]},
+        "board_type": {"enum": BOARD_TYPES + [None]},
+        "sides": {"enum": [1, 2, None]},
+        "per": {"enum": ["lf", "sf", "ea"]},
+        "source": {"enum": ["drawing", "derived", "assumed"]},
+        "product_id": {"bsonType": ["string", "null"]},  # product_data._id hex once searched
+    },
+}
+
 _NUM = {"bsonType": "number"}
 _MONEY = {"bsonType": "number", "minimum": 0}
 _STR = {"bsonType": "string"}
@@ -111,6 +132,9 @@ VALIDATORS: dict[str, dict] = {
         "required": ["type_tag", "studs", "layers_each_side"],
         "properties": {
             "job_id": _STR,
+            "name": _STR_OR_NULL,
+            "color": _STR_OR_NULL,
+            "materials": {"bsonType": "array", "items": MATERIAL},
             "type_tag": {"bsonType": "string", "minLength": 1, "maxLength": 12},
             "studs": {
                 "bsonType": "object",
@@ -206,6 +230,7 @@ VALIDATORS: dict[str, dict] = {
         "properties": {
             "job_id": _STR,
             "condition_id": _STR,
+            "alternate_id": _STR_OR_NULL,
             "lf": _MONEY,
             "height_ft": _MONEY,
             "lines": {
@@ -293,6 +318,7 @@ VALIDATORS: dict[str, dict] = {
             "job_id": _STR,
             "sheet": _STR,  # sheets._id hex
             "condition_id": _STR,
+            "alternate_id": _STR_OR_NULL,
             "kind": {"enum": ["linear", "area", "count"]},
             "points": {"bsonType": "array", "minItems": 1, "items": POINT},  # PDF points, top-left origin
             "quantity": {"bsonType": "number", "minimum": 0},
@@ -307,6 +333,18 @@ VALIDATORS: dict[str, dict] = {
         "bsonType": "object",
         "required": ["source", "reason", "at"],
         "properties": {"source": _STR, "collection": _STR, "reason": _STR, "at": {"bsonType": "date"}},
+    },
+    "alternates": {
+        "bsonType": "object",
+        "required": ["job_id", "name", "kind", "created_at"],
+        "properties": {
+            "job_id": _STR,
+            "name": {"bsonType": "string", "minLength": 1, "maxLength": 80},
+            "kind": {"enum": ["base", "alternate"]},
+            "description": _STR_OR_NULL,
+            "order": _NUM,
+            "created_at": {"bsonType": "date"},
+        },
     },
 }
 
@@ -348,7 +386,8 @@ INDEXES: dict[str, list[tuple[list, dict]]] = {
     "ewos": [([("job_id", 1)], {})],
     "ewo_drafts": [([("ewo_id", 1)], {})],
     "orders": [([("job_id", 1)], {})],
-    "measurements": [([("job_id", 1), ("condition_id", 1)], {}), ([("sheet", 1)], {})],
+    "measurements": [([("job_id", 1), ("condition_id", 1), ("alternate_id", 1)], {}), ([("sheet", 1)], {})],
+    "alternates": [([("job_id", 1), ("name", 1)], {"unique": True})],
     "usage": [([("job_id", 1)], {})],
     "product_data": [([("query_hash", 1)], {"unique": True})],
     "model_policy": [([("task", 1)], {"unique": True})],

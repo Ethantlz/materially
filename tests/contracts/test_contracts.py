@@ -55,6 +55,18 @@ def test_seed_rows_valid_and_sample_order_items_priced():
     assert {line["item"] for line in SAMPLES["orders"]["lines"]} <= items
 
 
+def test_alternates_and_materials_contract():
+    assert validate("alternates", SAMPLES["alternates"]) == []
+    assert validate("conditions", SAMPLES["conditions"]) == []
+    assert SAMPLES["conditions"]["materials"][0]["role"] == "stud"
+    bad = {**SAMPLES["conditions"], "materials": [{"key": "x", "role": "glitter", "desc": "?"}]}
+    assert any("role" in e for e in validate("conditions", bad))
+    assert validate("measurements", {**SAMPLES["measurements"], "alternate_id": "abc"}) == []
+    assert validate("orders", {**SAMPLES["orders"], "alternate_id": None}) == []
+    items = {r["item"] for r in price_book()}
+    assert {"resilient_channel_25ga_12ft", "sealant_acoustical_28oz", "sealant_firerated_10oz"} <= items
+
+
 EXPECTED = sorted((Path(__file__).resolve().parents[2] / "fixtures" / "expected").glob("*.json"))
 
 

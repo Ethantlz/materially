@@ -12,6 +12,8 @@ Numbers are formatted with :g (3.625 -> "3.625", 6.0 -> "6"):
     corner_bead_10ft                          ea
     insulation_batt_{size_in}in               sf     2.5, 3.5, 6
     labor_framing_hr | labor_hanging_hr | labor_finishing_hr   hr
+    resilient_channel_25ga_12ft               ea
+    sealant_acoustical_28oz | sealant_firerated_10oz   tube
 """
 from contracts.schemas import BOARD_TYPES
 
@@ -72,5 +74,8 @@ def price_book() -> list[dict]:
         _row("labor_framing_hr", "hr", 85.0),
         _row("labor_hanging_hr", "hr", 80.0),
         _row("labor_finishing_hr", "hr", 78.0),
+        _row("resilient_channel_25ga_12ft", "ea", 6.40),
+        _row("sealant_acoustical_28oz", "tube", 9.50),
+        _row("sealant_firerated_10oz", "tube", 12.75),
     ]
     return rows
