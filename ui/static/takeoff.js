@@ -42,6 +42,7 @@ const S = {
   meas: [], qty: new Map(), qtyOk: true, measOk: true,
   draft: null, sel: null, cal: null, cur: null, cursor: null, shift: false, space: false, down: null, qtySig: "",
   open: null, products: {},  // open = condition id whose materials are expanded; products = condition id -> {product_id: doc}
+  addH: null,  // {cid, value}: the wall type whose "+ Height" form is open, and what has been typed in it
 };
 
 const SPEC_FLAG = 0.7;  // P(mismatch) above this marks a spec check as a warning
@@ -221,17 +222,32 @@ function renderToolbar() {
 }
 
 function condRow(c, i) {
-  const tag = esc(c.type_tag), nm = esc(shortName(c));
+  const tag = esc(c.type_tag), sub = !!c.parent_id;  // a sub-condition is the parent's wall type at another height
+  const nm = esc(sub ? shortName(c).replace(/\s@\s[\d.]+'$/, "") : shortName(c));  // a height shows its height instead of repeating it
   const src = c.source && c.source.sheet ? sheetById(c.source.sheet) : null;
   const open = S.open === c.id;
-  return `<div class="crow ${c.id === S.condId ? "active" : ""}" data-cid="${c.id}" data-testid="cond-row" style="--c:${esc(c.color)}" role="button" tabindex="0" aria-pressed="${c.id === S.condId}">
+  const rowId = sub ? 'data-testid="cond-sub-row"' : 'data-testid="cond-row"';
+  const head = sub
+    ? `<b class="ctag" data-testid="cond-tag">${tag}</b><span class="chgt" title="${tag} at ${esc(c.height_ft)} ft">@ ${esc(+c.height_ft)}'</span><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span>`
+    : `<b class="ctag" data-testid="cond-tag">${tag}</b><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span>`;
+  return `<div class="crow ${sub ? "sub" : ""} ${c.id === S.condId ? "active" : ""}" data-cid="${c.id}" ${rowId} style="--c:${esc(c.color)}" role="button" tabindex="0" aria-pressed="${c.id === S.condId}">
     <span class="cswatch" data-testid="cond-swatch"></span>
-    <div><div class="ctop"><b class="ctag" data-testid="cond-tag">${tag}</b><span class="cname" data-testid="cond-name" title="${esc(c.name)}">${nm}</span></div>
+    <div><div class="ctop">${head}</div>
       <div class="cnums"><span data-testid="cond-lf" data-u="lf"><b></b> LF</span><span data-testid="cond-sf" data-u="sf"><b></b> SF</span><span data-testid="cond-ea" data-u="ea"><b></b> EA</span></div>
+      ${sub ? "" : addHeightHtml(c)}
       ${open ? materialsHtml(c) : ""}</div>
     <div class="cside"><button type="button" class="btn-ghost sm" data-expand="${c.id}" data-testid="cond-expand" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the materials ${tag} is built from" title="${open ? "Hide" : "Show"} the materials this type is built from">${open ? "▾" : "▸"}</button><span class="cactive" data-testid="cond-active">ACTIVE</span>
       ${src ? `<button type="button" class="csrc" data-src="${c.id}" data-testid="cond-source" title="Show where ${tag} is defined on ${esc(src.sheet_no || "its sheet")}">${esc(src.sheet_no || "source")} ↗</button>` : `<span class="ckey">${i < 9 ? i + 1 : ""}</span>`}</div>
   </div>`;
+}
+
+// "+ Height" under a wall type: the same type measured at another wall height. It opens a one-field form (feet) in the row.
+function addHeightHtml(c) {
+  const tag = esc(c.type_tag), a = S.addH;
+  if (!a || a.cid !== c.id) {
+    return `<button type="button" class="btn-ghost sm caddh" data-addh="${c.id}" data-testid="cond-add-height" title="Measure ${tag} at another wall height" aria-label="Add another height for ${tag}">+ Height</button>`;
+  }
+  return `<form class="hform" data-hform="${c.id}" autocomplete="off"><input type="number" name="height_ft" min="1" max="60" step="any" inputmode="decimal" required placeholder="ft" value="${esc(a.value)}" data-testid="cond-height-input" aria-label="Wall height in feet for ${tag}"><span class="muted small">ft</span><button type="submit" class="sm">Add</button><button type="button" class="btn-ghost sm" data-hcancel>Cancel</button></form>`;
 }
 
 // What a wall type is built from: one row per material, linked to its product_data doc once it has been searched.
@@ -250,8 +266,10 @@ function materialsHtml(c) {
 }
 function renderConds() {
   const list = $("#clist");
+  const typing = !!document.activeElement?.closest?.(".hform");  // a re-render (the 6 s poll, a pick) mustn't eat a height being typed
   list.innerHTML = S.conds.length ? S.conds.map(condRow).join("")
     : `<div class="pempty" data-testid="cond-empty">No conditions yet. They appear as the partition sheet is read, or add one with + New condition.</div>`;
+  if (typing) $(".hform input", list)?.focus();
   updateNumbers();
 }
 
@@ -730,6 +748,12 @@ $("#alt-select").addEventListener("change", async (e) => {
 });
 
 $("#clist").addEventListener("click", async (e) => {
+  if (e.target.closest(".hform")) {  // typing a height is not picking the condition
+    if (e.target.closest("[data-hcancel]")) { S.addH = null; renderConds(); }
+    return;
+  }
+  const ah = e.target.closest("[data-addh]");
+  if (ah) { S.addH = { cid: ah.dataset.addh, value: "" }; renderConds(); return void $(".hform input", $("#clist"))?.focus(); }
   const ex = e.target.closest("[data-expand]");
   if (ex) {  // expand a condition into the materials it is built from
     const id = ex.dataset.expand;
@@ -762,9 +786,29 @@ $("#clist").addEventListener("click", async (e) => {
   if (row) setCond(row.dataset.cid);
 });
 $("#clist").addEventListener("keydown", (e) => {
+  if (e.target.closest(".hform")) {  // Enter submits the form; Esc closes it
+    if (e.key === "Escape") { e.preventDefault(); S.addH = null; renderConds(); }
+    return;
+  }
   if (e.key !== "Enter") return;
   const row = e.target.closest("[data-cid]");
   if (row) { e.preventDefault(); setCond(row.dataset.cid); }
+});
+$("#clist").addEventListener("input", (e) => { if (S.addH && e.target.closest(".hform")) S.addH.value = e.target.value; });
+$("#clist").addEventListener("submit", async (e) => {  // + Height: POST the sub-condition, reload the list, and pick it
+  const f = e.target.closest("[data-hform]");
+  if (!f) return;
+  e.preventDefault();
+  const h = Number(f.elements.height_ft.value);
+  if (!(h >= 1 && h <= 60)) return void toast("Enter a wall height from 1 to 60 feet.", true);
+  const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+  const r = await Takeoff.addHeight(f.dataset.hform, h);
+  btn.disabled = false;
+  if (!r.ok) return void toast(errText(r, "Couldn't add that height."), true);
+  S.addH = null;
+  await reloadData(true);
+  const id = Takeoff.idOf(r.data);
+  if (id && cond(id)) { setCond(id); toast(`Added ${cond(id).type_tag} @ ${h}'`); } else renderConds();
 });
 
 // Scan partitions: the server re-reads the partition sheets and upserts every type (idempotent, D7). A parse is

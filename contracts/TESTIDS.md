@@ -206,3 +206,6 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - ewos-empty | /jobs/{job}/pm | empty row of the PM page's field EWOs table
 - drawer-orders | /jobs/{job}/takeoff | the quantities drawer's "Orders →" link: opens the orders popup (full-page orders list where the popup script is missing)
 - material-error | /jobs/{job}/takeoff | why "Find product" failed, shown in that material row until the next try (js)
+- cond-add-height | /jobs/{job}/takeoff | "+ Height" under a wall type: opens the form that adds the same type at another wall height (js)
+- cond-height-input | /jobs/{job}/takeoff | wall height in feet for the new sub-condition; Enter or Add creates it (js)
+- cond-sub-row | /jobs/{job}/takeoff | a sub-condition (the wall type at another height), indented under its parent; click makes it active (js)

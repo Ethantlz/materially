@@ -141,8 +141,8 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
         "routing": {**routing, **({"normalized": changed} if changed else {})},
     }
     with _lock_for(job_id, doc.get("type_tag")):
-        existing = db.conditions.find_one(
-            {"job_id": job_id, "type_tag": doc.get("type_tag")}, {"name": 1, "color": 1, "materials": 1}
+        existing = db.conditions.find_one(  # top level only: a sub-condition (parent_id set) is never the upsert target
+            {"job_id": job_id, "type_tag": doc.get("type_tag"), "parent_id": None}, {"name": 1, "color": 1, "materials": 1}
         )
         if existing is None:
             return conditions.insert(db, doc, "extract.partition")
@@ -153,7 +153,23 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
         except WriteError as e:  # the validator rejected the re-parse: keep the old condition, park the new one
             to_review(db, "extract.partition", {**doc, "job_id": job_id}, str(e))
             return None
+        _sync_heights(db, existing["_id"], doc)
         return existing["_id"]
+
+
+def _sync_heights(db: Database, parent_id: ObjectId, doc: dict) -> None:
+    """A re-scanned parent's assembly goes to its sub-conditions (the same type at other heights). Each keeps its
+    own _id, name, colour, height_ft and the products found for its materials."""
+    set_ = {k: doc[k] for k in conditions.ASSEMBLY if k in doc}
+    unset = {k: "" for k in conditions.ASSEMBLY if k not in doc}
+    for child in db.conditions.find({"parent_id": str(parent_id)}, {"materials": 1}):
+        update = {"$set": {**set_, "materials": _keep_product_ids(child.get("materials") or [], doc["materials"])}}
+        if unset:
+            update["$unset"] = unset
+        try:
+            db.conditions.update_one({"_id": child["_id"]}, update)
+        except WriteError as e:  # the validator rejected it: the child keeps its old assembly
+            to_review(db, "extract.partition", {**doc, "_id": child["_id"], "parent_id": str(parent_id)}, str(e))
 
 
 def parse_blocks(db: Database, job_id: str, sheet: dict, blocks: list[Block]) -> list[ObjectId | None]:

@@ -29,6 +29,11 @@ BOARD_LABELS = {
 }
 CONTENT = ("type_tag", "studs", "layers_each_side", "sides", "insulation", "fire_rating", "ul_assembly", "stc",
            "height_ft", "name", "color")
+# What a sub-condition (the same wall type at another height) takes from its parent, and a re-scan of the parent
+# gives it again. Its _id, name, colour, height_ft and parent_id are its own.
+ASSEMBLY = ("type_tag", "studs", "layers_each_side", "sides", "insulation", "fire_rating", "ul_assembly", "stc",
+            "materials", "source")
+HEIGHT_FT = (1, 60)  # the schema's height_ft range
 _writing = threading.Lock()  # colour pick + insert, so parallel parses don't take the same free colour
 # Trade sizes a metric drawing's conversions land near (92 mm -> 3.622", 400 mm -> 15.75", 16 mm -> 0.63"),
 # with how close (fraction of the size) a value must be to snap.
@@ -119,11 +124,11 @@ def color_for(db: Database, job_id: str, tag: str, exclude: set[str] = frozenset
     return PALETTE[start]
 
 
-def insert(db: Database, doc: dict, source: str) -> ObjectId | None:
-    """insert_or_review with a name and colour filled in when the doc has none."""
+def insert(db: Database, doc: dict, source: str, exclude: set[str] = frozenset()) -> ObjectId | None:
+    """insert_or_review with a name and colour filled in when the doc has none (a colour not in `exclude`)."""
     with _writing:
         doc.setdefault("name", name_for(doc))
-        doc.setdefault("color", color_for(db, doc.get("job_id"), doc.get("type_tag")))
+        doc.setdefault("color", color_for(db, doc.get("job_id"), doc.get("type_tag"), exclude))
         return insert_or_review(db, "conditions", doc, source)
 
 
@@ -190,6 +195,8 @@ def patch(db: Database, condition_id: str, fields: dict) -> dict:
 
 def delete(db: Database, condition_id: str) -> None:
     doc = _get(db, condition_id)
+    if db.conditions.count_documents({"parent_id": str(doc["_id"])}):
+        raise Refused(409, "Delete its heights first.")
     counts = {
         "measurement": db.measurements.count_documents({"condition_id": condition_id}),
         "order": db.orders.count_documents({"condition_id": condition_id}),
@@ -211,3 +218,29 @@ def duplicate(db: Database, condition_id: str) -> dict:
     if doc is None:
         raise Refused(422, reason)
     return doc
+
+
+def add_subcondition(db: Database, parent_id: str, height_ft, name: str | None = None) -> dict:
+    """The parent's wall type at another height: a condition of its own (own _id, name, colour, height_ft) that
+    copies the parent's assembly and points back at it with parent_id. Measurements, orders and alternates
+    reference it like any condition. One level only: a sub-condition takes no heights of its own."""
+    parent = _get(db, parent_id)
+    if parent.get("parent_id"):
+        raise Refused(422, "A height can't have heights of its own; add the height to its wall type.")
+    lo, hi = HEIGHT_FT
+    if isinstance(height_ft, bool) or not isinstance(height_ft, (int, float)) or not lo <= height_ft <= hi:
+        raise Refused(422, f"height_ft must be a number of feet from {lo} to {hi}.")
+    if name is not None and not isinstance(name, str):
+        raise Refused(422, "name must be text.")
+    doc = {k: copy.deepcopy(parent[k]) for k in ASSEMBLY if k in parent}
+    doc.update(
+        job_id=parent["job_id"], parent_id=str(parent["_id"]), height_ft=height_ft,
+        name=(name or "").strip() or f"{parent.get('name') or name_for(parent)} @ {height_ft:g}'",
+        routing={"method": "subcondition", "parent_id": str(parent["_id"])},
+    )
+    # a colour no condition of this wall type uses yet, so the heights read apart on the drawing
+    taken = set(db.conditions.distinct("color", {"job_id": parent["job_id"], "type_tag": parent.get("type_tag")}))
+    new_id = insert(db, doc, "extract.condition", exclude=taken)
+    if new_id is None:
+        raise Refused(422, _rejection(db, doc))
+    return db.conditions.find_one({"_id": new_id})

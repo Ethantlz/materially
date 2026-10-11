@@ -134,6 +134,7 @@ VALIDATORS: dict[str, dict] = {
             "job_id": _STR,
             "name": _STR_OR_NULL,
             "color": _STR_OR_NULL,
+            "parent_id": _STR_OR_NULL,  # a sub-condition (the same wall type at another height): its parent's id hex
             "materials": {"bsonType": "array", "items": MATERIAL},
             "type_tag": {"bsonType": "string", "minLength": 1, "maxLength": 12},
             "studs": {
