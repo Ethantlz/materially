@@ -91,3 +91,16 @@ def test_pages_show_the_key_numbers(client):
 @pytest.mark.parametrize("value,text", [(3.625, '3-5/8"'), (0.625, '5/8"'), (6, '6"'), (2.5, '2-1/2"'), (None, "—")])
 def test_inches(value, text):
     assert inches(value) == text
+
+
+def test_reason_summary_reads_mongo_rejection():
+    from ui.api import reason_summary
+
+    raw = ("Document failed validation: {'operatorName': '$jsonSchema', 'schemaRulesNotSatisfied': [{'operatorName': "
+           "'properties', 'propertiesNotSatisfied': [{'propertyName': 'studs', 'details': [{'operatorName': 'properties', "
+           "'propertiesNotSatisfied': [{'propertyName': 'gauge', 'details': [{'operatorName': 'enum', 'specifiedAs': "
+           "{'enum': [12, 14, 16, 18, 20, 22, 25, 30]}, 'reason': 'value was not found in enum', 'consideredValue': 19}]}]}]}]}, "
+           "{'operatorName': 'required', 'specifiedAs': {'required': ['type_tag', 'studs', 'layers_each_side']}, "
+           "'missingProperties': ['layers_each_side']}]}")
+    assert reason_summary(raw) == "Rejected by MongoDB's validator · gauge: 19 not allowed · missing: layers_each_side"
+    assert reason_summary("Jev's two answers disagreed") == "Jev's two answers disagreed"

@@ -1,6 +1,7 @@
 """Server-rendered pages (lane 3). Pages read MongoDB directly, so they work before other lanes merge;
 actions (build order, edit qty, send PO, drop a pin) call the other lanes' JSON APIs from static/api.js."""
 import json
+import re
 from datetime import datetime
 from fractions import Fraction
 from pathlib import Path
@@ -54,6 +55,21 @@ templates.env.filters.update(
     board=lambda b: BOARD_LABELS.get(b, b or "—"), task=lambda t: TASK_LABELS.get(t, t),
 )
 templates.env.globals.update(SPEC_FLAG=SPEC_FLAG)
+
+
+def reason_summary(reason: str) -> str:
+    """One readable line from MongoDB's 'Document failed validation: {details}' (insert_or_review's reason).
+    Other reasons pass through unchanged."""
+    if "failed validation" not in (reason or ""):
+        return reason or ""
+    parts = []
+    for m in re.finditer(r"'reason': '([^']+)', 'consideredValue': ([^}]+)}", reason):
+        prop = re.findall(r"'propertyName': '(\w+)'", reason[: m.start()])
+        why = "not allowed" if "enum" in m.group(1) else m.group(1)
+        parts.append(f"{prop[-1] if prop else 'value'}: {m.group(2).strip()} {why}")
+    for m in re.finditer(r"'missingProperties': \[([^\]]*)\]", reason):
+        parts.append("missing: " + m.group(1).replace("'", ""))
+    return "Rejected by MongoDB's validator · " + " · ".join(parts) if parts else reason
 
 
 def _job(db, job_id: str) -> dict:
@@ -190,6 +206,7 @@ def review_page(request: Request, job_id: str | None = None):
         it["doc_json"] = json.dumps(doc, indent=1, default=str)[:4000]
         label = (doc.get("type_tag") or str(doc.get("description") or "")[:40]) if isinstance(doc, dict) else str(doc or "")[:40]
         it["doc_label"] = label or "show"
+        it["reason_short"] = reason_summary(it.get("reason", ""))
     return _page(request, "review.html", job, "review", items=items)
 
 

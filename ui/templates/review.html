@@ -13,7 +13,8 @@
   <tr data-testid="review-row">
     <td class="muted">{{ it.at | clock }}</td>
     <td><span class="badge">{{ it.source }}</span>{% if it.collection %}<div class="muted small">→ {{ it.collection }}</div>{% endif %}</td>
-    <td class="reason" data-testid="review-reason">{{ it.reason }}</td>
+    <td><div class="why" data-testid="review-reason">{{ it.reason_short }}</div>
+      {% if it.reason_short != it.reason %}<details><summary class="muted small">MongoDB's full error</summary><div class="reason">{{ it.reason }}</div></details>{% endif %}</td>
     <td><details><summary>{{ it.doc_label }}</summary><pre>{{ it.doc_json }}</pre></details></td>
   </tr>
   {% endfor %}

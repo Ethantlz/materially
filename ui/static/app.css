@@ -112,3 +112,4 @@ details pre { white-space: pre-wrap; font-size: 12px; max-height: 280px; overflo
   .top { padding: 10px 14px; gap: 6px; } .crumb { display: none; } .tabs a { padding: 5px 7px; font-size: 13px; }
   .drafts { grid-template-columns: 1fr; } .tbl { font-size: 13px; } .tbl th, .tbl td { padding: 7px 8px; }
 }
+.why { color: #a51111; font-weight: 600; }

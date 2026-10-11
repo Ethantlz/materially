@@ -111,7 +111,7 @@ def seed(db, live: bool) -> str:
         ])
         prices = {p["item"]: p["unit_cost"] for p in db.price_book.find()}
         lines = [  # board padded past takeoff + waste so the guard trips
-            {"item": "stud_3.625_20ga_10ft", "qty": 80, "unit": "ea", "computed_qty": 76, "waste": 0.05},
+            {"item": "stud_3.625_20ga_10ft", "qty": 79, "unit": "ea", "computed_qty": 76, "waste": 0.05},
             {"item": "track_3.625_20ga_10ft", "qty": 21, "unit": "ea", "computed_qty": 20, "waste": 0.05},
             {"item": "board_0.625_type_x_4x10", "qty": 70, "unit": "ea", "computed_qty": 50, "waste": 0.1},
             {"item": "screws_1.25in", "qty": 2, "unit": "box", "computed_qty": 2, "waste": 0.0},
@@ -136,7 +136,7 @@ def seed(db, live: bool) -> str:
             r = jev.choice(f"{EWO_TEXT} Room: 101 OFFICE", TASKS, "Which task handles this extra work order?", job_id=job_id)
             if r["choice"]:
                 try:
-                    out = run_task(r["choice"], {"ewo": EWO_TEXT, "room": "101 OFFICE", "conditions": [DRAWING_CONDITION | {"type_tag": "A1"}],
+                    out = run_task(r["choice"], {"ewo": EWO_TEXT, "room": "101 OFFICE", "conditions": [DRAWING_CONDITION | {"type_tag": "A1", "height_ft": 10}], "wall_height_ft": 10,
                                                  "price_book": list(db.price_book.find({"item": {"$regex": "3.625_20ga|0.625_type_x_4x10|labor"}}, {"_id": 0}))},
                                    "ewo_drafts", job_id=job_id)
                     insert_or_review(db, "ewo_drafts", {**out["result"], "ewo_id": ewo_id, "job_id": job_id, "task": r["choice"],
