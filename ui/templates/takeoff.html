@@ -138,9 +138,16 @@
     </dl>
   </div>
 </div>
+
+<dialog id="modal" class="modal" data-testid="modal">
+  <div class="modal-head"><h2></h2><button class="btn-ghost sm" data-testid="modal-close">Close</button></div>
+  <div class="modal-body"></div>
+</dialog>
+
 <script>window.TAKEOFF = {{ boot | tojson }};</script>
 {% endblock %}
 {% block scripts %}
 <script src="/static/lib.js"></script>
 <script src="/static/takeoff.js"></script>
+<script src="/static/modals.js"></script>
 {% endblock %}

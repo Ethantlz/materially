@@ -1,26 +1,3 @@
 {% extends "base.html" %}
 {% block title %}Review queue{% endblock %}
-{% block body %}
-<div class="pagehead">
-  <h1>Review queue</h1>
-  <p class="muted">Anything MongoDB's validators rejected, or a decision model wasn't sure about, waits here for a person, with the reason.</p>
-</div>
-{% if items %}
-<table class="tbl" data-testid="review-table">
-  <thead><tr><th>When</th><th>From</th><th>Reason</th><th>Document</th></tr></thead>
-  <tbody>
-  {% for it in items %}
-  <tr data-testid="review-row">
-    <td class="muted">{{ it.at | clock }}</td>
-    <td><span class="badge">{{ it.source }}</span>{% if it.collection %}<div class="muted small">→ {{ it.collection }}</div>{% endif %}</td>
-    <td><div class="why" data-testid="review-reason">{{ it.reason_short }}</div>
-      {% if it.reason_short != it.reason %}<details><summary class="muted small">MongoDB's full error</summary><div class="reason">{{ it.reason }}</div></details>{% endif %}</td>
-    <td><details><summary>{{ it.doc_label }}</summary><pre>{{ it.doc_json }}</pre></details></td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="card empty" data-testid="review-empty">Nothing to review.</div>
-{% endif %}
-{% endblock %}
+{% block body %}{% include "_review.html" %}{% endblock %}

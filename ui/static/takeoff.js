@@ -741,7 +741,12 @@ $("#qty-body").addEventListener("click", async (e) => {
   const cid = btn.dataset.order, c = cond(cid), q = S.qty.get(cid) || running(cid);
   btn.disabled = true; btn.textContent = "Creating…";
   const r = await Takeoff.createOrder(S.job.id, cid, Math.round((q.lf || 0) * 10) / 10, c?.height_ft || 10, S.altId);
-  if (r.ok && r.orderId) { location.href = "/orders/" + r.orderId; return; }
+  if (r.ok && r.orderId) {
+    // the order opens in the takeoff's popup; without modals.js (an older page) fall back to the order page
+    if (window.Modal) Modal.open("Order", "/ui/orders/" + r.orderId + "/panel");
+    else location.href = "/orders/" + r.orderId;
+    return;
+  }
   toast(errText(r, "Couldn't create the order."), true);
   btn.disabled = false; btn.textContent = "Create order";
 });

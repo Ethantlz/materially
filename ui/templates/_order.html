@@ -1,0 +1,82 @@
+<div data-testid="order-panel">
+<div class="pagehead">
+  <a class="back" href="/jobs/{{ o.job_id }}/orders">← Orders</a>
+  <h1>Order · {% if c %}<span class="swatch" style="background:{{ c.color }};width:14px;height:14px"></span><a class="tagchip big" href="/conditions/{{ c.id }}">{{ c.type_tag }}</a>{% endif %}
+    {{ "%g" % o.lf }} LF{% if o.height_ft %} × {{ "%g" % o.height_ft }} ft{% endif %}</h1>
+</div>
+
+<div id="guard">
+{% set g = o.guard or {} %}
+{% if g.over %}
+<div class="alert bad" data-testid="guard-warning"><b>Over-purchase guard tripped.</b>
+  {{ over | length }} line{{ "s" if over | length != 1 }} order more than the takeoff plus waste allows: {{ over | join(", ") }}.</div>
+{% elif o.guard %}
+<div class="alert good" data-testid="guard-ok">Guard: every line is within takeoff quantity plus waste.</div>
+{% endif %}
+</div>
+
+<div class="split">
+  <section>
+    <div id="lines">
+    <table class="tbl lines" data-testid="order-lines">
+      <thead><tr><th>Item</th><th class="num">Takeoff qty</th><th class="num">Waste</th><th class="num">Order qty</th><th>Unit</th><th class="num">Unit cost</th><th class="num">Line total</th></tr></thead>
+      <tbody>
+      {% for l in o.lines %}
+      <tr class="{{ 'over' if l.item in over }}" data-testid="order-line">
+        <td class="mono">{{ l.item }}</td>
+        <td class="num">{{ "%g" % l.computed_qty if l.computed_qty is not none else "—" }}</td>
+        <td class="num">{{ ("%g%%" % (100 * l.waste)) if l.waste is not none else "—" }}</td>
+        <td class="num"><input class="qty" type="number" min="0" step="any" value="{{ '%g' % l.qty }}" data-i="{{ loop.index0 }}" data-testid="order-line-qty" {{ "disabled" if o.sent_at }}></td>
+        <td>{{ l.unit }}</td>
+        <td class="num">{{ l.unit_cost | money }}</td>
+        <td class="num">{{ (l.qty * l.unit_cost) | money if l.unit_cost is not none else "unpriced" }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="6" class="num"><b>Total</b></td><td class="num"><b data-testid="order-total">{{ o.total | money }}</b></td></tr></tfoot>
+    </table>
+    </div>
+    <p class="muted small" style="margin-top:8px">Change an order quantity and the guard re-runs.</p>
+  </section>
+
+  <section>
+    <div class="card postate" data-testid="po-card" id="po-card">
+      {% if o.sent_at %}
+      <div class="sent" data-testid="po-sent">✓ PO sent {{ o.sent_at | clock }}{% if o.supplier_email %} to {{ o.supplier_email }}{% endif %}</div>
+      {% else %}
+      <div class="muted">Supplier: Sample Supply Co · goes to the test inbox</div>
+      <button id="send" data-testid="send-po">Send PO</button>
+      {% endif %}
+    </div>
+    <div class="preview" id="po-preview" data-testid="po-preview" {{ "" if o.sent_at else "hidden" }}>{% if o.sent_at %}<iframe class="po-frame" title="Purchase order" src="/api/orders/{{ o.id }}/po"></iframe>{% endif %}</div>
+    <div class="card paperstate" id="po-empty" data-testid="po-preview-empty" hidden>The PO preview isn't available yet.</div>
+  </section>
+</div>
+</div>
+<script data-init>
+(() => {
+  const OID = {{ o.id | tojson }};
+  // In the takeoff's modal a fresh panel replaces this one; as a page on its own (a deep link) it reloads.
+  const refresh = () => (window.Modal ? window.Modal.open("Order", `/ui/orders/${OID}/panel`) : location.reload());
+
+  function bind() {
+    document.querySelectorAll("input.qty").forEach((inp) => inp.addEventListener("change", async () => {
+      const r = await call("PATCH", API.orderLine(OID, inp.dataset.i), { qty: +inp.value });
+      if (!r.ok) return toast(errText(r, "Couldn't update the line"), true);
+      await call("POST", API.guard(OID));
+      refresh();
+    }));
+
+    const send = document.getElementById("send");
+    if (send) send.addEventListener("click", async () => {
+      send.disabled = true; send.textContent = "Sending…";
+      const r = await call("POST", API.sendPO(OID));
+      if (!r.ok) { toast(errText(r, "Send failed"), true); send.disabled = false; send.textContent = "Send PO"; return; }
+      refresh();
+    });
+  }
+
+  // In the modal api.js is already loaded; as a full page this inline script runs before it.
+  if (window.call) bind(); else document.addEventListener("DOMContentLoaded", bind);
+})();
+</script>
