@@ -1,29 +1,3 @@
 {% extends "base.html" %}
 {% block title %}Orders · {{ job.name }}{% endblock %}
-{% block body %}
-<div class="pagehead row">
-  <div>
-    <h1>Material orders</h1>
-    <p class="muted">Built from the takeoff quantities and priced inside MongoDB ($lookup on the price book, $merge into orders). The over-purchase guard checks every line against takeoff plus waste.</p>
-  </div>
-  <a class="btn" href="/jobs/{{ job.id }}/takeoff">Back to takeoff</a>
-</div>
-{% if orders %}
-<table class="tbl" data-testid="orders-table">
-  <thead><tr><th>Condition</th><th class="num">LF</th><th>Height</th><th class="num">Lines</th><th class="num">Total</th><th>Guard</th><th>PO</th></tr></thead>
-  <tbody>
-  {% for o in orders %}{% set c = conditions.get(o.condition_id) %}
-  <tr data-testid="order-row">
-    <td><a href="/orders/{{ o.id }}" data-testid="order-link">{% if c %}<span class="swatch" style="background:{{ c.color }}"></span>{% endif %}<span class="tagchip">{{ c.type_tag if c else "?" }}</span></a></td>
-    <td class="num">{{ "%g" % o.lf }}</td><td>{{ ("%g ft" % o.height_ft) if o.height_ft else "—" }}</td>
-    <td class="num">{{ o.lines | length }}</td><td class="num"><b>{{ o.total | money }}</b></td>
-    <td>{% if (o.guard or {}).over %}<span class="badge bad">over-purchase</span>{% elif o.guard %}<span class="badge good">ok</span>{% else %}—{% endif %}</td>
-    <td>{% if o.sent_at %}<span class="badge good">sent {{ o.sent_at | clock }}</span>{% else %}<span class="muted">not sent</span>{% endif %}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="card empty" data-testid="orders-empty">No orders yet. Measure walls in the <a href="/jobs/{{ job.id }}/takeoff">takeoff</a>, then use Create order on a row of the quantities table.</div>
-{% endif %}
-{% endblock %}
+{% block body %}{% include "_orders.html" %}{% endblock %}

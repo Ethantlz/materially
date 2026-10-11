@@ -111,6 +111,24 @@ def test_inches(value, text):
     assert inches(value) == text
 
 
+@pytest.mark.parametrize("path,tid", [
+    ("orders", "orders-panel"), ("ewos", "ewos-panel"), ("tracking", "tracking-panel"), ("review", "review-panel")])
+def test_panels_render(client, path, tid):
+    r = client.get(f"/ui/jobs/{JOB_ID}/panel/{path}")
+    assert r.status_code == 200 and f'data-testid="{tid}"' in r.text
+
+
+def test_order_panel_has_lines_guard_and_send(client):
+    html = client.get(f"/ui/orders/{ORDER_ID}/panel").text
+    for tid in ("order-panel", "order-line-qty", "guard-warning", "send-po"):
+        assert f'data-testid="{tid}"' in html
+
+
+def test_tracking_lists_orders_and_ewos(client):
+    html = client.get(f"/ui/jobs/{JOB_ID}/panel/tracking").text
+    assert html.count('data-testid="tracking-row"') >= 2  # the sample order and the sample EWO
+
+
 def test_reason_summary_reads_mongo_rejection():
     from ui.api import reason_summary
 

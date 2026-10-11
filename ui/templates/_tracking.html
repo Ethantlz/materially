@@ -1,0 +1,20 @@
+<div data-testid="tracking-panel">
+{% if rows %}
+<table class="tbl" data-testid="tracking-table">
+  <thead><tr><th>Kind</th><th>What</th><th>State</th><th class="num">Total</th><th class="num">Time</th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% set cls = {"sent": "good", "guard tripped": "bad", "drafted": "task"}.get(r.state, "") %}
+  <tr data-testid="tracking-row">
+    <td><span class="badge">{{ r.kind }}</span></td>
+    <td>{% if r.kind == "Order" %}<a href="/orders/{{ r.id }}" data-order-open="{{ r.id }}">{{ r.what }}</a>{% else %}{{ r.what }}{% endif %}</td>
+    <td><span class="badge {{ cls }}">{{ r.state }}</span></td>
+    <td class="num">{{ r.total | money }}</td>
+    <td class="num muted">{{ r.at | clock }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card empty" data-testid="tracking-empty">Nothing has moved yet. Build an order from the takeoff, or drop a pin on the Field EWO page.</div>
+{% endif %}
+</div>

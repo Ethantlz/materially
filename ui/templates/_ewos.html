@@ -1,0 +1,68 @@
+{% set jid = job_id or (job.id if job else "") %}
+<div data-testid="ewos-panel">
+<div class="pagehead row">
+  <div><h1>PM queue</h1>
+    <p class="muted">Field EWOs, routed by a decision model and priced by the cheapest capable model. New drafts appear live.</p></div>
+  <span class="live" id="live" data-testid="pm-live">connecting…</span>
+</div>
+<section class="drafts" id="drafts" data-testid="pm-queue">
+  {% for d in drafts %}{% include "_draft.html" %}{% endfor %}
+  <div class="card empty" id="pm-empty" {{ "hidden" if drafts }} data-testid="pm-empty">No drafts yet. Drop a pin on the <a href="/jobs/{{ jid }}/ewo">Field EWO</a> page.</div>
+</section>
+
+<h2>Field EWOs</h2>
+{% if ewos %}
+<table class="tbl" data-testid="ewo-table">
+  <thead><tr><th>Description</th><th>Room</th><th>Status</th><th class="num">Time</th></tr></thead>
+  <tbody>
+  {% for e in ewos %}{% set r = rooms.get(e.room_id) if rooms else None %}
+  <tr data-testid="ewo-row">
+    <td>{{ e.description }}</td>
+    <td class="muted">{{ ((r.number or "") ~ " " ~ (r.name or "")).strip() if r else "—" }}</td>
+    <td><span class="badge {{ 'task' if e.status == 'drafted' }}">{{ e.status }}</span></td>
+    <td class="num muted">{{ e.created_at | clock }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card empty" data-testid="ewo-empty">No field EWOs yet for this project.</div>
+{% endif %}
+</div>
+<script data-init>
+(() => {
+  // The PM queue refreshes itself: the pipeline lane's change stream, and a poll until that route answers.
+  const start = () => {
+    const list = document.getElementById("drafts"), live = document.getElementById("live");
+    if (!list || !live) return;
+    const seen = new Set([...list.querySelectorAll(".draft")].map((el) => el.dataset.id));
+    async function addDraft(id) {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      const r = await Pm.draftCard(id);
+      if (!r.ok) return seen.delete(id);
+      list.insertAdjacentHTML("afterbegin", r.data.html);
+      list.firstElementChild.classList.add("fresh");
+      document.getElementById("pm-empty").hidden = true;
+    }
+    function idOf(doc) { return doc.id || (doc._id && (doc._id.$oid || doc._id)); }
+
+    let polling = null;
+    function poll() {
+      live.textContent = "live (polling)"; live.className = "live on";
+      polling = setInterval(async () => {
+        const r = await Pm.draftIds(JOB_ID);
+        if (r.ok) for (const id of [...r.data].reverse()) await addDraft(id);
+      }, 3000);
+    }
+    const es = new EventSource(API.events(JOB_ID));
+    es.onopen = () => { live.textContent = "live"; live.className = "live on"; };
+    es.onmessage = (e) => { try { addDraft(idOf(JSON.parse(e.data))); } catch {} };
+    es.onerror = () => { if (es.readyState === EventSource.CLOSED || !polling) { es.close(); if (!polling) poll(); } };
+    // closing the popup stops this stream; a fresh panel starts its own
+    document.addEventListener("modal:closed", () => { es.close(); clearInterval(polling); }, { once: true });
+  };
+  // In the modal api.js is already loaded; as the PM page this inline script runs before it.
+  if (window.Pm) start(); else document.addEventListener("DOMContentLoaded", start);
+})();
+</script>

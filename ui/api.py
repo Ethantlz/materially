@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from app.db import get_db, jsonable, oid
 from contracts.schemas import GAUGES
 from extract.scale import COMMON_LABELS
+from projects.alternates import scope
 from ui import standins
 from ui.common import (  # noqa: F401  (inches and reason_summary are re-exported for the tests)
     BOARD_LABELS, PALETTE, condition_views, discipline, inches, next_color, reason_summary, stud_text,
@@ -57,6 +58,11 @@ def _job(db, job_id: str) -> dict:
 
 def _page(request: Request, name: str, job: dict | None = None, tab: str = "", **ctx):
     return templates.TemplateResponse(request, name, {"job": job, "tab": tab, **ctx})
+
+
+def _partial(request: Request, name: str, **ctx):
+    """A fragment of a page, loaded into the takeoff screen's modal (and included by the old pages)."""
+    return templates.TemplateResponse(request, name, ctx)
 
 
 def _cost(db, job_id: str) -> dict:
@@ -248,11 +254,19 @@ def _drafts(db, job_id: str, draft_id: str | None = None) -> list[dict]:
     return drafts
 
 
+def _ewos(db, job_id: str) -> list[dict]:
+    return jsonable(list(db.ewos.find({"job_id": job_id}).sort("_id", -1)))
+
+
+def _rooms(db, job_id: str) -> dict[str, dict]:
+    return {r["id"]: r for r in jsonable(list(db.rooms.find({"job_id": job_id})))}
+
+
 @router.get("/jobs/{job_id}/pm")
 def pm_page(request: Request, job_id: str):
     db = get_db()
     job = _job(db, job_id)
-    return _page(request, "pm.html", job, "pm", drafts=_drafts(db, job_id))
+    return _page(request, "pm.html", job, "pm", drafts=_drafts(db, job_id), ewos=_ewos(db, job_id), rooms=_rooms(db, job_id))
 
 
 @router.get("/ui/drafts/{draft_id}/card", response_class=HTMLResponse)
@@ -266,10 +280,8 @@ def draft_card(request: Request, draft_id: str):
     return templates.TemplateResponse(request, "_draft.html", {"d": drafts[0]})
 
 
-@router.get("/review")
-def review_page(request: Request, job_id: str | None = None):
-    db = get_db()
-    job = _job(db, job_id) if job_id else None
+def _review_items(db, job_id: str | None) -> list[dict]:
+    """Everything waiting for a person: a validator rejection, or a decision model that wasn't sure."""
     q = {"$or": [{"doc.job_id": job_id}, {"job_id": job_id}]} if job_id else {}
     items = jsonable(list(db.review_queue.find(q).sort("at", -1).limit(200)))
     for it in items:
@@ -278,7 +290,14 @@ def review_page(request: Request, job_id: str | None = None):
         label = (doc.get("type_tag") or str(doc.get("description") or "")[:40]) if isinstance(doc, dict) else str(doc or "")[:40]
         it["doc_label"] = label or "show"
         it["reason_short"] = reason_summary(it.get("reason", ""))
-    return _page(request, "review.html", job, "review", items=items)
+    return items
+
+
+@router.get("/review")
+def review_page(request: Request, job_id: str | None = None):
+    db = get_db()
+    job = _job(db, job_id) if job_id else None
+    return _page(request, "review.html", job, "review", items=_review_items(db, job_id))
 
 
 @router.get("/ui/jobs/{job_id}/drafts")
@@ -290,3 +309,53 @@ def draft_ids(job_id: str) -> list[str]:
 @router.get("/ui/jobs/{job_id}/cost")
 def job_cost(job_id: str) -> dict:
     return _cost(get_db(), job_id)
+
+
+# ---- the takeoff screen's popups: each one is a partial, loaded into the modal (and included by the old page) ----
+
+@router.get("/ui/jobs/{job_id}/panel/orders", response_class=HTMLResponse)
+def panel_orders(request: Request, job_id: str, alt: str | None = None):
+    db = get_db()
+    q = {"job_id": job_id, **(scope(job_id, alt) if alt else {})}
+    orders = jsonable(list(db.orders.find(q).sort("_id", -1)))
+    conds = {c["id"]: c for c in _conditions(db, job_id)}
+    return _partial(request, "_orders.html", job_id=job_id, orders=orders, conditions=conds)
+
+
+@router.get("/ui/orders/{order_id}/panel", response_class=HTMLResponse)
+def panel_order(request: Request, order_id: str):
+    db = get_db()
+    order = db.orders.find_one({"_id": oid(order_id)}) if oid(order_id) else None
+    if not order:
+        raise HTTPException(404, "No such order.")
+    order = jsonable(order)
+    # items_over may hold item names or whole lines, depending on lane 2.
+    over = [x.get("item") if isinstance(x, dict) else x for x in (order.get("guard") or {}).get("items_over") or []]
+    cond = next((c for c in _conditions(db, order["job_id"]) if c["id"] == order["condition_id"]), None)
+    return _partial(request, "_order.html", o=order, c=cond, over=over)
+
+
+@router.get("/ui/jobs/{job_id}/panel/ewos", response_class=HTMLResponse)
+def panel_ewos(request: Request, job_id: str):
+    db = get_db()
+    return _partial(request, "_ewos.html", job_id=job_id, drafts=_drafts(db, job_id),
+                    ewos=_ewos(db, job_id), rooms=_rooms(db, job_id))
+
+
+@router.get("/ui/jobs/{job_id}/panel/tracking", response_class=HTMLResponse)
+def panel_tracking(request: Request, job_id: str, alt: str | None = None):
+    db = get_db()
+    rows = []
+    for o in jsonable(list(db.orders.find({"job_id": job_id, **(scope(job_id, alt) if alt else {})}))):
+        state = "sent" if o.get("sent_at") else ("guard tripped" if (o.get("guard") or {}).get("over") else "priced")
+        rows.append({"kind": "Order", "id": o["id"], "what": f'{o.get("lf", 0):g} LF', "state": state, "total": o.get("total"),
+                     "at": o.get("sent_at") or o.get("created_at")})
+    for e in jsonable(list(db.ewos.find({"job_id": job_id}))):
+        rows.append({"kind": "EWO", "id": e["id"], "what": e["description"][:70], "state": e["status"], "total": None, "at": e.get("created_at")})
+    rows.sort(key=lambda r: r["at"] or "", reverse=True)
+    return _partial(request, "_tracking.html", rows=rows)
+
+
+@router.get("/ui/jobs/{job_id}/panel/review", response_class=HTMLResponse)
+def panel_review(request: Request, job_id: str):
+    return _partial(request, "_review.html", items=_review_items(get_db(), job_id))
