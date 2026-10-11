@@ -3,10 +3,9 @@
 Materially is a back office for drywall and framing contractors. Upload a drawing set and it sorts the sheets,
 reads the partition-type sheet into a library of wall types ("conditions"), lets the estimator measure those walls
 on the drawings, checks manufacturer product data against each wall's spec, and turns the measured footage into a
-priced material order with an over-purchase guard and a PO for the supplier. Out in the field, a foreman pins extra
-work (an EWO) on the drawing and the PM gets a priced draft a moment later. It is built for **estimators**,
-**project managers** and **foremen**, so that the drawings, the takeoff, the order and the extra work stay in one
-place instead of being retyped between takeoff software, spreadsheets and emails. Built at c0mpiled-15.
+priced material order with an over-purchase guard and a PO for the supplier. It is built for **estimators** and
+**project managers**, so that the drawings, the takeoff and the order stay in one place instead of being retyped
+between takeoff software, spreadsheets and emails. Built at c0mpiled-15.
 
 ![The takeoff workspace: conditions on the left, the drawing with measured walls, quantities below](docs/screenshots/takeoff.png)
 *The takeoff workspace: conditions on the left, measured walls on the sheet, running quantities below.*
@@ -30,7 +29,7 @@ place instead of being retyped between takeoff software, spreadsheets and emails
 3. **Take off on the drawings.** Pick a condition and measure with **Linear**, **Area** or **Count**
    (**Calibrate** sets the scale when a sheet has none). The quantities drawer totals LF, SF and EA per condition.
    Alternates (Base bid, Alternate 1…) keep separate takeoffs on the same drawings, and the top bar opens Orders,
-   EWOs, Tracking, Review and Suppliers without leaving the sheet. (This is the screenshot at the top.)
+   Tracking, Review and Suppliers without leaving the sheet. (This is the screenshot at the top.)
 
 4. **Pull and check product data.** Expand a condition (▸) to see the materials it is built from.
    **Pull product data** searches your supplier sites (Firecrawl; the **Suppliers** list sets which sites), extracts
@@ -51,21 +50,12 @@ place instead of being retyped between takeoff software, spreadsheets and emails
    ![Material order with the guard result and the sent PO](docs/screenshots/order.png)
    *An order for SA4: priced lines with waste, the guard passed, and the sent PO on the right.*
 
-7. **Field EWOs, live to the PM.** On the Field EWO page a foreman taps the drawing where the extra work is. The pin
-   is matched to the nearest room on that sheet (MongoDB `$near`), Jev picks the task (price extra, base scope
-   check or backcharge), the cheapest capable model drafts priced line items, and the draft appears in the PM queue
-   live (change stream → server-sent events).
-
-   <img src="docs/screenshots/ewo.png" alt="Field EWO page on a phone: a pin on the drawing and its room" width="360">
-
-   *Field EWO on a phone: the pin found its room; describe the work and send it to the PM.*
-
 Every model call is logged in MongoDB, and the badge in the top bar shows how many AI decisions a job took and what
 they cost. Anything a validator rejected, or a model wasn't sure about, waits in the **Review** queue.
 
 **Under the hood:** Python 3.11+, FastAPI, Jinja2 templates with small vanilla JS, MongoDB Atlas. Jev
-(`typesafe/jev-1.13`, via OpenRouter) only *picks* (sheet kind, spec mismatch, EWO task) and never writes. DeepSeek
-V4.1 Flash on Luminal, behind a local LiteLLM proxy, reads partition text and writes drafts; Sonnet is the one-time
+(`typesafe/jev-1.13`, via OpenRouter) only *picks* (sheet kind, spec mismatch) and never writes. DeepSeek
+V4.1 Flash on Luminal, behind a local LiteLLM proxy, reads partition text; Sonnet is the one-time
 retry when a result fails validation. The full design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Quickstart (Windows, PowerShell)
@@ -121,7 +111,7 @@ infisical run --env=dev -- uv run python -m contracts.setup_db      # validators
 | `scripts/` | `dev.ps1`, the smoke test, a synthetic drawing-set generator | integrator |
 | `docs/` | build spec, lane prompts, plans, screenshots | integrator |
 | `extract/` | drawing set → sheets, scales, conditions, materials, rooms | lane 1 |
-| `pipeline/` | measurements, EWOs, orders and the guard, PM queue, cost | lane 2 |
+| `pipeline/` | measurements, orders and the guard, cost | lane 2 |
 | `ui/` | the screens (Jinja templates, CSS, vanilla JS) | lane 3 |
 | `procure/`, `po/` | product data and supplier sites; PO render and send | H1 |
 | `orders/`, `eval/`, `demo/` | order math (`orders/math.py`); accuracy and demo script | H2 |
