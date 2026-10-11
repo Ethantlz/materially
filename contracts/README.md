@@ -26,6 +26,9 @@ Only the integrator edits `app/` and `contracts/`. If a lane needs a change here
 - `alternates` split a project's takeoff: Base bid (kind `base`, made on first use) plus named alternates. Drawings and
   conditions belong to the project; `measurements.alternate_id` and `orders.alternate_id` belong to one alternate.
   A missing `alternate_id` means Base bid.
+- `product_sources` is the company-wide list of supplier sites (`domain` is the hostname, lowercased, no `www.`, unique). A product
+  search is limited to these domains (Firecrawl `includeDomains`); with none it searches the open web. `product_data.domains` records
+  the list a search used and is part of its `query_hash`; `product_data.checked` is false until Jev has spec-checked it.
 - `conditions.materials[]` lists what a wall type is built from (`MATERIAL` in schemas.py), built by `extract.materials.derive`.
 
 ## Shared calls

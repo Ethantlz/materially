@@ -75,7 +75,8 @@ References between collections (`job_id`, `sheet`, `condition_id`, `room_id`, `e
 - **ewos**: job_id, sheet, pin [x, y], room_id, description, submitted_by ("foreman, synthetic"), status, created_at.
 - **ewo_drafts**: ewo_id, task, model, line_items [{desc, qty, unit, unit_cost}], total, explanation, routing{}, escalated (bool).
 - **orders**: job_id, condition_id, lf, height_ft, lines [{item, qty, unit, unit_cost, computed_qty}], total, guard {over (bool), items_over []}, supplier_email, sent_at.
-- **product_data**: query_hash (unique), condition_id, component, url, title, attrs {thickness_in, board_type, ul, gauge, ...}, spec_check {attr: p_mismatch}, fetched_at.
+- **product_data**: query_hash (unique; the query plus the sorted supplier domains), condition_id, component, url, title, attrs {thickness_in, board_type, ul, gauge, ...}, spec_check {attr: p_mismatch}, domains, checked, fetched_at.
+- **product_sources**: url, domain (unique hostname, no `www.`), name, created_at. The company's supplier list; a Firecrawl search is limited to these domains (none = the open web).
 - **price_book**: item, unit, unit_cost, supplier ("Sample Supply Co"). Made-up numbers.
 - **model_policy**: task, tier (`decide` | `quick` | `expert`), model, retry_model, enabled. The admin edits it and the router reads it live.
 - **usage**: job_id, task, model, input_tokens, output_tokens, cost_usd, ms, at. Index on job_id.

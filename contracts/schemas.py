@@ -271,7 +271,19 @@ VALIDATORS: dict[str, dict] = {
             "title": _STR_OR_NULL,
             "attrs": {"bsonType": "object"},
             "spec_check": {"bsonType": "object"},  # {attr: p_mismatch}
+            "domains": {"bsonType": "array", "items": _STR},  # the supplier hostnames searched (empty = the open web); part of the cache key
+            "checked": {"bsonType": "bool"},  # false until every specified attribute has been spec-checked by Jev
             "fetched_at": {"bsonType": "date"},
+        },
+    },
+    "product_sources": {  # the company-wide list of supplier sites product searches are limited to
+        "bsonType": "object",
+        "required": ["url", "domain", "created_at"],
+        "properties": {
+            "url": _STR,
+            "domain": {"bsonType": "string", "minLength": 1},  # hostname, lowercased, no "www."; unique
+            "name": _STR_OR_NULL,
+            "created_at": {"bsonType": "date"},
         },
     },
     "price_book": {
@@ -402,6 +414,7 @@ INDEXES: dict[str, list[tuple[list, dict]]] = {
     "alternates": [([("job_id", 1), ("name", 1)], {"unique": True})],
     "usage": [([("job_id", 1)], {})],
     "product_data": [([("query_hash", 1)], {"unique": True})],
+    "product_sources": [([("domain", 1)], {"unique": True})],
     "model_policy": [([("task", 1)], {"unique": True})],
     "price_book": [([("item", 1), ("supplier", 1)], {"unique": True})],
 }
