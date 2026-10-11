@@ -86,6 +86,14 @@ def test_every_testid_exists_on_its_page(client):
     assert not missing, missing
 
 
+def test_projects_page_lists_alternates_and_links_to_takeoff(client, mock_db):
+    from projects import alternates as alt
+    a1 = alt.create_alternate(str(JOB_ID), "Alternate 1")
+    page = client.get("/").text
+    assert 'data-testid="project-row"' in page and "Alternate 1" in page
+    assert f'/jobs/{JOB_ID}/takeoff?alt={a1}' in page
+
+
 def test_conditions_page_lists_both_kinds_of_rejected_parse(client):
     html = client.get(f"/jobs/{JOB_ID}/conditions").text
     assert html.count('data-testid="condition-rejected"') == 2
