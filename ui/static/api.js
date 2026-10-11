@@ -129,8 +129,9 @@ window.costBadge = (job) => {
       route("undo", "POST", [`/api/sheets/${sheet}/measurements/undo`, `/ui/standin/sheets/${sheet}/measurements/undo`]),
 
     // One entry per condition: {cid, lf, sf, ea, n, ...}. The rows may come one per (condition, unit) or already merged.
-    async quantities(job) {                                                                               // pipeline
-      const r = await route("quantities", "GET", [`/api/jobs/${job}/quantities`, `/ui/standin/jobs/${job}/quantities`]);
+    async quantities(job, alt) {                                                                          // pipeline
+      const q = alt ? `?alternate_id=${alt}` : "";
+      const r = await route("quantities", "GET", [`/api/jobs/${job}/quantities${q}`, `/ui/standin/jobs/${job}/quantities${q}`]);
       const by = new Map();
       if (r.ok) for (const row of list(r.data, "rows", "quantities", "items")) {
         const key = row._id && typeof row._id === "object" ? row._id : {};
@@ -149,8 +150,9 @@ window.costBadge = (job) => {
     },
 
     // Order from takeoff (pipeline); until that route lands, the manual order route with the measured LF.
-    async createOrder(job, cid, lf, heightFt) {
-      let r = await route("order", "POST", [`/api/jobs/${job}/conditions/${cid}/order`]);
+    async createOrder(job, cid, lf, heightFt, alt) {
+      const q = alt ? `?alternate_id=${alt}` : "";
+      let r = await route("order", "POST", [`/api/jobs/${job}/conditions/${cid}/order${q}`]);
       if (r.miss) r = await route("orderManual", "POST", API.buildOrder(), { job_id: job, condition_id: cid, lf, height_ft: heightFt });
       return { ...r, orderId: r.ok ? r.data.order_id || r.data.id || idOf(r.data) || idOf(r.data.order) : null };
     },

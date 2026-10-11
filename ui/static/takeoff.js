@@ -37,7 +37,7 @@ const readout = $("#readout"), hintEl = $("#hint");
 
 const S = {
   job: B.job, sheets: B.sheets, conds: B.conditions, sig: JSON.stringify([B.sheets, B.conditions]),
-  sheetId: B.sheet, condId: B.cond || null, tool: "select", focus: B.focus || null,
+  sheetId: B.sheet, altId: B.alt, condId: B.cond || null, tool: "select", focus: B.focus || null,
   k: 1, tx: 0, ty: 0, fitK: 1, fitted: true, iw: 0, ih: 0, ips: 1.5, loaded: false,
   meas: [], qty: new Map(), qtyOk: true, measOk: true,
   draft: null, sel: null, cal: null, cur: null, cursor: null, shift: false, space: false, down: null, qtySig: "",
@@ -120,7 +120,7 @@ async function openSheet(id) {
   if (S.draft) finishDraft();
   S.sheetId = id; S.sel = null; S.cal = null; S.meas = []; S.cur = null;
   hideCalPop(); hideMenus(); syncUrl();
-  renderRail(); renderToolbar(); loadImage();
+  renderSheetSelect(); renderToolbar(); loadImage();
   const m = await Takeoff.measurements(id);
   if (id !== S.sheetId) return;
   S.meas = m.ok ? m.items : []; S.measOk = m.ok;
@@ -130,13 +130,14 @@ function syncUrl() {
   const q = new URLSearchParams();
   if (S.sheetId) q.set("sheet", S.sheetId);
   if (S.condId) q.set("cond", S.condId);
+  if (S.altId) q.set("alt", S.altId);
   history.replaceState(null, "", `/jobs/${S.job.id}/takeoff?${q}`);
 }
 
 // ---------------------------------------------------------------- data
 async function refresh() {
   const sid = S.sheetId;
-  const [m, q] = await Promise.all([sid ? Takeoff.measurements(sid) : { ok: true, items: [] }, Takeoff.quantities(S.job.id)]);
+  const [m, q] = await Promise.all([sid ? Takeoff.measurements(sid) : { ok: true, items: [] }, Takeoff.quantities(S.job.id, S.altId)]);
   if (sid === S.sheetId) { S.meas = m.ok ? m.items : []; S.measOk = m.ok; }
   S.qty = new Map(q.rows.map((x) => [x.cid, x])); S.qtyOk = q.ok;
   renderAll();
@@ -150,35 +151,34 @@ async function reloadData(force = false) {
   const before = sheet();
   S.sheets = r.data.sheets; S.conds = r.data.conditions; S.job = { ...S.job, ...r.data.job };
   if (!S.sheetId && S.sheets.length) S.sheetId = (S.sheets.find((s) => s.image_path) || S.sheets[0]).id;
-  renderRail(); renderConds(); renderToolbar(); renderQty();
+  renderSheetSelect(); renderConds(); renderToolbar(); renderQty();
   const now = sheet();
   if (now && (!before || before.id !== now.id || before.image_path !== now.image_path)) { loadImage(); refresh(); }
   return true;
 }
 
-// ---------------------------------------------------------------- rendering: rail, toolbar, panel, drawer
-function renderRail() {
-  const rail = $("#rail");
-  if (!S.sheets.length) { rail.innerHTML = `<div class="pempty" data-testid="rail-empty">No sheets yet. Upload a drawing set first.</div>`; return; }
-  rail.innerHTML = groupSheets(S.sheets).map((g) =>
-    `<div class="rgroup" data-testid="rail-group"><i>${esc(g.code)}</i>${esc(g.name)}<span>${g.sheets.length}</span></div>` +
-    g.sheets.map((s) => {
-      const sc = s.scale, pt = s.kind === "partition_types";
-      const chip = sc && sc.pt_per_ft
-        ? `<span class="chip ${sc.source === "manual" ? "cal" : ""}" data-testid="sheet-scale-chip" title="${esc(sc.label)} · ${sc.pt_per_ft} pt per ft">${esc(sc.label)}</span>`
-        : `<span class="chip warn" data-testid="sheet-scale-chip" title="No usable scale: set or calibrate it before measuring">${sc && sc.label === "NTS" ? "NTS" : "no scale"}</span>`;
-      return `<button type="button" class="rrow ${s.id === S.sheetId ? "active" : ""} ${pt ? "pt" : ""}" data-sheet="${s.id}" data-testid="rail-sheet">
-        <span class="rthumb">${s.thumb_path ? `<img src="${esc(s.thumb_path)}" alt="" loading="lazy">` : `<i>rendering…</i>`}</span>
-        <span class="rtext"><span class="rno"><span data-testid="rail-sheet-no">${esc(s.sheet_no || "p." + s.page)}</span>${pt ? `<em>partitions</em>` : ""}</span><span class="rtitle">${esc(s.title || "Untitled sheet")}</span>
-        <span class="rmeta">${chip}</span></span></button>`;
-    }).join("")).join("");
-  rail.querySelector(".rrow.active")?.scrollIntoView({ block: "nearest" });
+// ---------------------------------------------------------------- rendering: sheets, toolbar, panel, drawer
+// The sheet dropdown replaces the rail: names only; the scale lives in the chip after Undo.
+function sheetOptions() {  // grouped by discipline, the same as the template's <optgroup>s
+  const groups = new Map();
+  for (const s of S.sheets) {
+    const name = (s.discipline && s.discipline.name) || "Other";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(s);
+  }
+  return [...groups].map(([name, items]) => `<optgroup label="${esc(name)}">` + items.map((s) =>
+    `<option value="${esc(s.id)}">${esc(s.sheet_no || "Page " + s.page)} — ${esc(s.title || "Untitled")}</option>`).join("") + `</optgroup>`).join("");
+}
+function renderSheetSelect() {
+  const sel = $("#sheet-select"), html = sheetOptions();
+  if (sel._html !== html) { sel.innerHTML = html; sel._html = html; }
+  if (sel.value !== S.sheetId) sel.value = S.sheetId || "";
 }
 
 function renderToolbar() {
   const sh = sheet(), sc = sh?.scale, chip = $("#scale-chip");
   chip.className = "chip " + (sc?.pt_per_ft ? (sc.source === "manual" ? "cal" : "") : "warn");
-  chip.textContent = sc?.pt_per_ft ? sc.label : sh ? (sc?.label === "NTS" ? "NTS · set scale" : "No scale") : "—";
+  chip.textContent = sc?.pt_per_ft ? sc.label : sh ? (sc?.label === "NTS" ? "NTS · set scale" : "No scale · set") : "—";
   chip.disabled = !sh;
   chip.title = sc?.pt_per_ft ? `${sc.pt_per_ft} pt per real foot · ${scaleNote(sc)}. Click to change.` : "No usable scale on this sheet. Click to set one or calibrate.";
   $$(".tool[data-tool]").forEach((b) => b.classList.toggle("on", b.dataset.tool === S.tool));
@@ -262,7 +262,7 @@ function renderQty() {
   </tr>`).join("");
 }
 
-function renderAll() { renderRail(); renderToolbar(); renderConds(); renderQty(); renderMeas(); renderDraft(); renderFocus(); renderCal(); updateHint(); }
+function renderAll() { renderSheetSelect(); renderToolbar(); renderConds(); renderQty(); renderMeas(); renderDraft(); renderFocus(); renderCal(); updateHint(); }
 
 // ---------------------------------------------------------------- rendering: canvas overlay
 function labelFor(m) {
@@ -429,7 +429,7 @@ async function finishDraft() {
   if (d.points.length < MIN_PTS[d.kind]) return cancelDraft();
   S.draft = null; S.cur = null;
   const c = cond(d.cond), pts = d.points.map((p) => [r1(p[0]), r1(p[1])]);
-  const body = { job_id: S.job.id, sheet: d.sheet, condition_id: d.cond, kind: d.kind, points: pts, height_ft: c?.height_ft ?? null };
+  const body = { job_id: S.job.id, sheet: d.sheet, condition_id: d.cond, kind: d.kind, points: pts, height_ft: c?.height_ft ?? null, alternate_id: S.altId };
   const tmp = { id: "tmp-" + Date.now(), ...body, quantity: localQty(d.kind, pts, d.sheet), unit: UNIT[d.kind], pending: true };
   if (d.sheet === S.sheetId) S.meas.push(tmp);
   renderMeas(); renderDraft(); renderQty();
@@ -621,7 +621,8 @@ $("#scale-menu").addEventListener("click", (e) => {
   if (b.dataset.cal !== undefined) { hideMenus(); setTool("calibrate"); } else chooseScale(b.dataset.label);
 });
 document.addEventListener("click", (e) => { if (!e.target.closest("#scale-menu, #help, #scale-chip, #btn-help")) hideMenus(); });
-$("#rail").addEventListener("click", (e) => { const row = e.target.closest("[data-sheet]"); if (row && row.dataset.sheet !== S.sheetId) openSheet(row.dataset.sheet); });
+$("#sheet-select").addEventListener("change", (e) => openSheet(e.target.value));
+$("#alt-select").addEventListener("change", async (e) => { S.altId = e.target.value; syncUrl(); await refresh(); });
 
 $("#clist").addEventListener("click", (e) => {
   const src = e.target.closest("[data-src]");
@@ -687,7 +688,7 @@ $("#qty-body").addEventListener("click", async (e) => {
   if (!btn || btn.disabled) return;
   const cid = btn.dataset.order, c = cond(cid), q = S.qty.get(cid) || running(cid);
   btn.disabled = true; btn.textContent = "Creating…";
-  const r = await Takeoff.createOrder(S.job.id, cid, Math.round((q.lf || 0) * 10) / 10, c?.height_ft || 10);
+  const r = await Takeoff.createOrder(S.job.id, cid, Math.round((q.lf || 0) * 10) / 10, c?.height_ft || 10, S.altId);
   if (r.ok && r.orderId) { location.href = "/orders/" + r.orderId; return; }
   toast(errText(r, "Couldn't create the order."), true);
   btn.disabled = false; btn.textContent = "Create order";
@@ -706,7 +707,7 @@ $("#quick-scale").addEventListener("change", (e) => { if (e.target.value) choose
 
 // ---------------------------------------------------------------- start
 toggleDrawer(store.get("mat.qtyOpen", "1") !== "0");
-renderRail(); renderConds(); renderToolbar(); updateHint();
+renderSheetSelect(); renderConds(); renderToolbar(); updateHint();
 (async () => {
   if (S.condId) setCond(S.condId);
   loadImage();
