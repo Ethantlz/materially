@@ -93,8 +93,9 @@ def test_sheet_select_has_names_not_scales(client):
     i_undo, i_scale = page.index('data-testid="tool-undo"'), page.index('data-testid="canvas-scale"')
     assert 0 < i_scale - i_undo < 400  # the scale chip sits right after Undo
     assert page.index('data-testid="cond-panel"') < page.index('data-testid="takeoff-canvas"')  # panel on the left
-    for tid in ("alt-select", "scan-partitions", "open-orders", "open-ewos", "open-tracking", "open-review"):
+    for tid in ("alt-select", "scan-partitions", "open-orders", "open-tracking", "open-review"):
         assert f'data-testid="{tid}"' in page
+    assert 'data-testid="open-ewos"' not in page  # EWOs aren't part of the app's top bar
 
 
 def test_job_url_redirects_to_takeoff(client):

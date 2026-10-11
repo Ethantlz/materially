@@ -188,7 +188,7 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - sheet-select | /jobs/{job}/takeoff | sheet dropdown, grouped by discipline; names only, no scales
 - scan-partitions | /jobs/{job}/takeoff | reads the partition sheets into the conditions library
 - open-orders | /jobs/{job}/takeoff | opens the orders popup
-- open-ewos | /jobs/{job}/takeoff | opens the EWOs popup
+- open-ewos | /jobs/{job}/takeoff | opens the EWOs popup; taken off the top bar (retired)
 - open-tracking | /jobs/{job}/takeoff | opens the tracking popup
 - open-review | /jobs/{job}/takeoff | opens the review popup
 - modal | /jobs/{job}/takeoff | the popup dialog the takeoff screen loads panels into

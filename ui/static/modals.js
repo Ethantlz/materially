@@ -38,7 +38,6 @@
   // The drawer's "Orders →" link opens the same popup; its href is the full-page fallback where this script isn't loaded.
   const drawerOrders = document.getElementById("drawer-orders");
   if (drawerOrders) drawerOrders.onclick = (e) => { e.preventDefault(); document.getElementById("open-orders")?.click(); };
-  bind("open-ewos", "EWOs", () => `/ui/jobs/${JOB_ID}/panel/ewos`);
   bind("open-tracking", "Tracking", () => `/ui/jobs/${JOB_ID}/panel/tracking?alt=${alt()}`);
   bind("open-review", "Review queue", () => `/ui/jobs/${JOB_ID}/panel/review`);
   // The supplier sites product searches use: the same list on every job, so no job id in the url.

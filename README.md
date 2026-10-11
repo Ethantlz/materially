@@ -26,15 +26,17 @@ between takeoff software, spreadsheets and emails. Built at c0mpiled-15.
    ![Conditions library listing each wall type and the one rejected parse](docs/screenshots/conditions.png)
    *The conditions library, with the parse MongoDB rejected (SB2) waiting in review.*
 
-3. **Take off on the drawings.** Pick a condition and measure with **Linear**, **Area** or **Count**
-   (**Calibrate** sets the scale when a sheet has none). The quantities drawer totals LF, SF and EA per condition.
+3. **Take off on the drawings.** Pick a condition and measure with **Linear**, **Area** or **Count**. **Measure**
+   checks a distance against the sheet's scale, and if it's off, calibrates from the same two clicks. The ✎ on a
+   condition edits it (a wall type's edit carries to its heights). The quantities drawer totals LF, SF and EA per
+   condition.
    Alternates (Base bid, Alternate 1…) keep separate takeoffs on the same drawings, and the top bar opens Orders,
    Tracking, Review and Suppliers without leaving the sheet. (This is the screenshot at the top.)
 
 4. **Pull and check product data.** Expand a condition (▸) to see the materials it is built from.
    **Pull product data** searches your supplier sites (Firecrawl; the **Suppliers** list sets which sites), extracts
    each product's attributes, and Jev checks every attribute against the condition: ✓ passes, ✗ is a likely
-   mismatch. Results are cached, so a repeat search makes no Firecrawl calls.
+   mismatch. Each project searches fresh; inside a project a repeat search is reused, so it makes no Firecrawl call.
 
    ![A condition's page: its build, source sheet and product data with spec checks](docs/screenshots/condition.png)
    *One condition (SA4): its build, where it is defined, and product data with Jev's spec checks.*
