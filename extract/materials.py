@@ -4,6 +4,8 @@ import re
 from collections import Counter
 from fractions import Fraction
 
+from contracts.schemas import GAUGES
+
 BOARD = {
     "regular": "regular", "type_x": "Type X", "type_c": "Type C", "moisture_resistant": "moisture-resistant",
     "mold_resistant": "mold-resistant", "type_x_mold_resistant": "Type X mold-resistant", "abuse_resistant": "abuse-resistant",
@@ -47,9 +49,12 @@ def derive(condition: dict, text: str = "") -> list[dict]:
         out.append(_m("insulation", "insulation", insulation or "Acoustical batt insulation, full cavity", "sf", "drawing", size_in=size))
     if rc := RC.search(t):
         one_side = "ONE SIDE" in t[rc.end(): rc.end() + 60]
+        # The callout may name a gauge the contract has no slot for (24 ga RC); the desc keeps the drawing's
+        # number, the attribute goes null so the condition still writes instead of failing validation.
+        g = int(rc.group(1))
         out.append(_m("resilient_channel", "resilient_channel", f"{rc.group(1)} ga resilient channel" + (f" @ {rc.group(2)}\" o.c." if rc.group(2) else "")
                       + (", one side" if one_side else ", both sides"), "lf", "drawing",
-                      gauge=int(rc.group(1)), spacing_in=float(rc.group(2)) if rc.group(2) else None, sides=1 if one_side else 2))
+                      gauge=g if g in GAUGES else None, spacing_in=float(rc.group(2)) if rc.group(2) else None, sides=1 if one_side else 2))
     if "FURRING CHANNEL" in t:
         out.append(_m("furring", "furring", "Furring channel", "lf", "drawing"))
     if "SEALANT" in t:
