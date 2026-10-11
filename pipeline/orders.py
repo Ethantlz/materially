@@ -5,8 +5,6 @@ build() inserts the unpriced order, then MongoDB prices it: one aggregation unwi
 price_book on item, sets unit_cost, regroups the lines with the total, and $merges the result back over the
 same order. guard() is an update pipeline, so the comparison runs in the database too.
 """
-import importlib
-import importlib.util
 import logging
 
 from bson import ObjectId
@@ -24,16 +22,10 @@ class OrderLocked(RuntimeError):
 
 
 def _lines_for():
-    """orders.math.lines_for once H2 has merged it, else our stand-in with the same signature."""
-    try:
-        merged = importlib.util.find_spec("orders.math") is not None
-    except (ImportError, ValueError):
-        merged = False
-    if merged:
-        return importlib.import_module("orders.math").lines_for
-    from pipeline._lines_stub import lines_for
+    """orders.math.lines_for, looked up per call so tests (and Ethan's constants) can swap it."""
+    from orders import math as order_math
 
-    return lines_for
+    return order_math.lines_for
 
 
 def _line(raw: dict) -> dict:

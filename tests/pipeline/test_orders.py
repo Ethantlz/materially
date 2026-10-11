@@ -1,8 +1,4 @@
 """Orders: priced inside MongoDB ($lookup + $merge), the over-purchase guard, and the PATCH that re-runs it."""
-import importlib.machinery
-import sys
-import types
-
 import pytest
 
 from app.db import now
@@ -56,14 +52,13 @@ def test_unknown_items_stay_unpriced_and_are_listed(db, job, client):
     assert client.get(f"/api/orders/{body['order_id']}").json()["unpriced"] == body["unpriced"]
 
 
-def test_build_uses_orders_math_once_it_is_importable(db, job, monkeypatch):
-    fake = types.ModuleType("orders.math")
-    fake.__spec__ = importlib.machinery.ModuleSpec("orders.math", None)
-    fake.lines_for = lambda condition, lf, height_ft: [
+def test_build_takes_its_lines_from_orders_math(db, job, monkeypatch):
+    from orders import math as order_math
+
+    monkeypatch.setattr(order_math, "lines_for", lambda condition, lf, height_ft: [
         {"item": "mud_all_purpose", "qty": 3, "unit": "box", "computed_qty": 3, "waste": 0},
         {"item": "tape_paper_500ft", "qty": 2, "unit": "roll", "computed_qty": 2, "waste": 0},
-    ]
-    monkeypatch.setitem(sys.modules, "orders.math", fake)
+    ])
     cid = add_condition(db, job)
 
     order = by_id(db.orders, orders.build(job, cid, 50, 9))
