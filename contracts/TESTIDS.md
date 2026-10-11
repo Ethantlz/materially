@@ -6,7 +6,7 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 `(js)` marks an element that JavaScript renders after load; tests check those in `ui/static` or the page's script.
 
 - nav-home | / | brand link to the projects page
-- tab-review-all | / | review queue link when no job is open
+- tab-review-all | / | review queue link when no job is open (retired)
 - upload-form | / | new project form
 - job-name | / | project name input
 - job-drop | / | PDF drop zone
@@ -15,20 +15,20 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - upload-error | / | upload error text
 - job-list | / | list of projects (only when one exists)
 - nav-job | /jobs/{job} | current job name in the header
-- nav-tabs | /jobs/{job} | job tabs
-- tab-sheets | /jobs/{job} | Sheets tab
-- tab-conditions | /jobs/{job} | Conditions tab
-- tab-orders | /jobs/{job} | Orders tab
-- tab-ewo | /jobs/{job} | Field EWO tab
-- tab-pm | /jobs/{job} | PM queue tab
-- tab-review | /jobs/{job} | Review tab
+- nav-tabs | /jobs/{job} | job tabs (retired)
+- tab-sheets | /jobs/{job} | Sheets tab (retired)
+- tab-conditions | /jobs/{job} | Conditions tab (retired)
+- tab-orders | /jobs/{job} | Orders tab (retired)
+- tab-ewo | /jobs/{job} | Field EWO tab (retired)
+- tab-pm | /jobs/{job} | PM queue tab (retired)
+- tab-review | /jobs/{job} | Review tab (retired)
 - cost-badge | /jobs/{job} | header badge: AI decisions and cost for the job (refreshes every 8 s)
-- job-title | /jobs/{job} | job name heading
-- job-progress | /jobs/{job} | ingest progress bar
-- job-status | /jobs/{job} | ingest status text
-- sheet-grid | /jobs/{job} | sheet thumbnails
-- sheet-viewer | /jobs/{job} | full-size sheet dialog
-- viewer-close | /jobs/{job} | closes the sheet dialog
+- job-title | /jobs/{job} | job name heading (retired)
+- job-progress | /jobs/{job} | ingest progress bar (retired)
+- job-status | /jobs/{job} | ingest status text (retired)
+- sheet-grid | /jobs/{job} | sheet thumbnails (retired)
+- sheet-viewer | /jobs/{job} | full-size sheet dialog (retired)
+- viewer-close | /jobs/{job} | closes the sheet dialog (retired)
 - sheet-card | /jobs/{job} | one sheet (js)
 - sheet-no | /jobs/{job} | sheet number on a card (js)
 - sheet-kind | /jobs/{job} | sheet kind badge; partition sheets are highlighted (js)
@@ -91,7 +91,7 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - toast | /jobs/{job} | transient message (js)
 
 ## Rework: takeoff workspace, dark chrome, PO preview (lane 3)
-- tab-takeoff | /jobs/{job} | Takeoff tab
+- tab-takeoff | /jobs/{job} | Takeoff tab (retired)
 - cost-detail | /jobs/{job} | per-task cost breakdown, opens when the cost badge is clicked
 - sheet-group | /jobs/{job} | one discipline group of sheets (js)
 - sheet-open | /jobs/{job} | "Open in takeoff" link on a sheet card (js)
@@ -103,12 +103,12 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - po-preview | /orders/{order} | PO preview panel (GET /api/orders/{id}/po)
 - po-preview-empty | /orders/{order} | shown when the PO preview endpoint isn't available
 - takeoff | /jobs/{job}/takeoff | the workspace
-- sheet-rail | /jobs/{job}/takeoff | left rail: sheets grouped by discipline
-- rail-empty | /jobs/{job}/takeoff | rail text when the job has no sheets (js)
-- rail-group | /jobs/{job}/takeoff | discipline heading in the rail (js)
-- rail-sheet | /jobs/{job}/takeoff | one sheet in the rail; click opens it on the canvas (js)
-- rail-sheet-no | /jobs/{job}/takeoff | sheet number in the rail (js)
-- sheet-scale-chip | /jobs/{job}/takeoff | scale chip on a rail sheet; amber when there is no scale (js)
+- sheet-rail | /jobs/{job}/takeoff | left rail: sheets grouped by discipline (retired)
+- rail-empty | /jobs/{job}/takeoff | rail text when the job has no sheets (js) (retired)
+- rail-group | /jobs/{job}/takeoff | discipline heading in the rail (js) (retired)
+- rail-sheet | /jobs/{job}/takeoff | one sheet in the rail; click opens it on the canvas (js) (retired)
+- rail-sheet-no | /jobs/{job}/takeoff | sheet number in the rail (js) (retired)
+- sheet-scale-chip | /jobs/{job}/takeoff | scale chip on a rail sheet; amber when there is no scale (js) (retired)
 - takeoff-toolbar | /jobs/{job}/takeoff | toolbar
 - tool-select | /jobs/{job}/takeoff | Select tool (V)
 - tool-linear | /jobs/{job}/takeoff | Linear tool (L)
@@ -167,3 +167,35 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - qty-sf | /jobs/{job}/takeoff | square feet cell (js)
 - qty-ea | /jobs/{job}/takeoff | count cell (js)
 - qty-create-order | /jobs/{job}/takeoff | builds a priced order from the row's linear feet and opens it (js)
+
+## Takeoff v2: projects page, takeoff screen, popups (lane 3)
+- project-list | / | projects table
+- project-row | / | one project
+- project-link | / | project name; opens its takeoff on the base bid
+- alt-chip | / | one alternate on a project row; opens the takeoff on that alternate
+- alt-add | / | form that adds an alternate to a project
+- alt-name | / | new alternate name input
+- alt-select | /jobs/{job}/takeoff | alternate switcher in the top bar
+- sheet-select | /jobs/{job}/takeoff | sheet dropdown, grouped by discipline; names only, no scales
+- scan-partitions | /jobs/{job}/takeoff | reads the partition sheets into the conditions library
+- open-orders | /jobs/{job}/takeoff | opens the orders popup
+- open-ewos | /jobs/{job}/takeoff | opens the EWOs popup
+- open-tracking | /jobs/{job}/takeoff | opens the tracking popup
+- open-review | /jobs/{job}/takeoff | opens the review popup
+- modal | /jobs/{job}/takeoff | the popup dialog the takeoff screen loads panels into
+- modal-close | /jobs/{job}/takeoff | closes the popup
+- cond-expand | /jobs/{job}/takeoff | shows the materials the condition is built from (js)
+- cond-materials | /jobs/{job}/takeoff | the materials list of one condition (js)
+- material-row | /jobs/{job}/takeoff | one material: what it is and the product found for it (js)
+- material-find | /jobs/{job}/takeoff | runs the product search for one material (js)
+- material-product | /jobs/{job}/takeoff | link to the product sheet, once one was found (js)
+- orders-panel | /ui/jobs/{job}/panel/orders | the orders popup
+- order-panel | /ui/orders/{order}/panel | one order in a popup
+- ewos-panel | /ui/jobs/{job}/panel/ewos | the EWOs popup: the PM queue and the field EWO list
+- ewo-table | /ui/jobs/{job}/panel/ewos | field EWOs table (only when there are some)
+- ewo-row | /ui/jobs/{job}/panel/ewos | one field EWO
+- tracking-panel | /ui/jobs/{job}/panel/tracking | the tracking popup
+- tracking-table | /ui/jobs/{job}/panel/tracking | every order and EWO with its state and time (only when something moved)
+- tracking-row | /ui/jobs/{job}/panel/tracking | one order or EWO
+- tracking-empty | /ui/jobs/{job}/panel/tracking | shown when nothing has moved yet
+- review-panel | /ui/jobs/{job}/panel/review | the review popup

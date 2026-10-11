@@ -42,7 +42,10 @@ def client(mock_db, monkeypatch):
 
 
 def _pages(client) -> dict[str, list[str]]:
-    """Each TESTIDS page pattern -> rendered HTML in the full state and the empty state."""
+    """Each TESTIDS page pattern -> rendered HTML in the full state and the empty state.
+
+    A pattern may be a full page, a popup partial (`/ui/jobs/{job}/panel/<name>`, `/ui/orders/{order}/panel`)
+    or the projects page; every one of them formats the same `{job}` / `{condition}` / `{order}` ids."""
     ids = {"full": {"job": JOB_ID, "condition": CONDITION_ID, "order": ORDER_ID},
            "empty": {"job": EMPTY_JOB, "condition": CONDITION_ID, "order": SENT_ORDER}}
     out = {}
@@ -60,8 +63,10 @@ def _pages(client) -> dict[str, list[str]]:
 
 
 def _testid_lines() -> list[str]:
+    """The live contract lines: a testid whose element the app no longer has is marked `(retired)` and skipped."""
     text = (ROOT / "contracts" / "TESTIDS.md").read_text(encoding="utf-8")
-    return [line[2:] for line in text.splitlines() if line.startswith("- ") and line.count("|") == 2]
+    return [line[2:] for line in text.splitlines()
+            if line.startswith("- ") and line.count("|") == 2 and not line.rstrip().endswith("(retired)")]
 
 
 def test_every_screen_renders(client):
