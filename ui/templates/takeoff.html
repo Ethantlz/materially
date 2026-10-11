@@ -58,7 +58,7 @@
   <div class="tk-tools" data-testid="takeoff-toolbar" role="toolbar" aria-label="Takeoff tools">
     <button type="button" class="tool on" data-tool="select" data-testid="tool-select" title="Select (V): click a measurement, Delete removes it">
       <svg class="ic" viewBox="0 0 24 24"><path d="M5 3l13 7-6 2-2 6z"/></svg>Select <kbd>V</kbd></button>
-    <button type="button" class="tool" data-tool="linear" data-testid="tool-linear" title="Linear (L): click along a wall, double-click or Enter to finish">
+    <button type="button" class="tool" data-tool="linear" data-testid="tool-linear" title="Linear (L): drag along a wall to draw it; click to chain points, double-click or Enter to finish">
       <svg class="ic" viewBox="0 0 24 24"><path d="M4 19L10 8l5 7 5-10"/><circle cx="4" cy="19" r="1.4"/><circle cx="20" cy="5" r="1.4"/></svg>Linear <kbd>L</kbd></button>
     <button type="button" class="tool" data-tool="area" data-testid="tool-area" title="Area (A): click the corners, double-click or Enter to finish">
       <svg class="ic" viewBox="0 0 24 24"><path d="M5 18l2-11 10 2 3 9z"/></svg>Area <kbd>A</kbd></button>
@@ -126,11 +126,12 @@
     <dl>
       <dt><kbd>V</kbd> <kbd>L</kbd> <kbd>A</kbd> <kbd>C</kbd> <kbd>K</kbd></dt><dd>Select, Linear, Area, Count, Calibrate</dd>
       <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick the Nth condition</dd>
+      <dt>Drag</dt><dd>Draw a wall</dd>
       <dt>Click</dt><dd>Add a point</dd>
       <dt>Double-click · <kbd>Enter</kbd></dt><dd>Finish and save</dd>
       <dt><kbd>Esc</kbd></dt><dd>Finish, or cancel if too short</dd>
       <dt>Right-click</dt><dd>Cancel the shape</dd>
-      <dt><kbd>Shift</kbd></dt><dd>Hold for 45° snap</dd>
+      <dt><kbd>Shift</kbd></dt><dd>Hold to snap: a dragged wall to horizontal or vertical, chained points to 45° steps</dd>
       <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo the last point or measurement</dd>
       <dt><kbd>Del</kbd></dt><dd>Delete the selected measurement</dd>
       <dt>Scroll</dt><dd>Zoom at the cursor</dd>

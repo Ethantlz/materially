@@ -820,6 +820,7 @@ $("#clist").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); S.addH = null; renderConds(); }
     return;
   }
+  if (e.target.closest("button, a, input, select, textarea")) return;  // a control inside the row keeps its own Enter (expand, Find product, + Height ...)
   if (e.key !== "Enter") return;
   const row = e.target.closest("[data-cid]");
   if (row) { e.preventDefault(); setCond(row.dataset.cid); }

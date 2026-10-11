@@ -552,3 +552,94 @@ def test_condition_views_pass_materials_through():
          "layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}], "materials": mats}
     assert condition_views([c])[0]["materials"] == mats
     assert condition_views([{**c, "materials": None}])[0]["materials"] == []
+
+
+# ---- takeoff help copy follows press-drag-release; Enter inside a condition row reaches the control it is on ----
+def test_takeoff_help_describes_drag_to_draw_and_what_shift_snaps():
+    html_src = (ROOT / "ui" / "templates" / "takeoff.html").read_text(encoding="utf-8")
+    assert "click along a wall" not in html_src and "click along the wall" not in html_src  # no copy still describing the old mode
+    overlay = html_src[html_src.index('data-testid="shortcuts"'):]
+    overlay = overlay[:overlay.index("</dl>")]
+    assert "<dt>Drag</dt><dd>Draw a wall</dd>" in overlay
+    assert overlay.index("<dt>Drag</dt>") < overlay.index("<dt>Click</dt><dd>Add a point</dd>")  # the Click row is kept, after Drag
+    shift = overlay[overlay.index("<kbd>Shift</kbd>"):]
+    shift = shift[:shift.index("</dd>")]
+    assert "horizontal or vertical" in shift and "45°" in shift  # a dragged wall and chained points snap differently
+    assert "Hold for 45° snap" not in html_src
+    tool = html_src[html_src.index('data-testid="tool-linear"'):]
+    tool = tool[:tool.index(">")]
+    assert "drag along a wall to draw it" in tool and "click to chain points" in tool and "double-click or Enter to finish" in tool
+
+
+def _clist_keydown_src(js: str) -> str:
+    """The arrow function passed to $("#clist").addEventListener("keydown", ...)."""
+    head = '$("#clist").addEventListener("keydown", '
+    start = js.index(head) + len(head) - 1
+    call = _balanced(js, js.index("(", js.index("addEventListener", start - len(head))))
+    return call[len('("keydown", '):-1]
+
+
+def test_the_condition_list_ignores_keys_from_controls_inside_a_row():
+    js = _takeoff_js()
+    src = _clist_keydown_src(js)
+    assert 'e.target.closest("button, a, input, select, textarea")' in src
+    assert src.index("button, a, input, select, textarea") < src.index('e.key !== "Enter"')  # before the row is looked up and selected
+
+
+def test_enter_on_a_button_inside_a_condition_row_is_left_to_the_button():
+    import json
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node isn't installed")
+    script = """
+const calls = [];
+const S = { addH: null };
+const setCond = (id) => calls.push(['setCond', id]);
+const renderConds = () => calls.push('renderConds');
+// A tiny DOM: closest() understands the three selector shapes the handler uses (tag lists, .class, [data-attr]).
+const el = (tag, o = {}, parent = null) => ({
+  tag, cls: o.cls || '', dataset: o.cid ? { cid: o.cid } : {}, parent,
+  closest(sel) {
+    const parts = sel.split(',').map((s) => s.trim());
+    for (let n = this; n; n = n.parent) {
+      if (parts.some((s) => s[0] === '.' ? n.cls.split(' ').includes(s.slice(1)) : s[0] === '[' ? s.slice(6, -1) in n.dataset : s === n.tag)) return n;
+    }
+    return null;
+  },
+});
+const handler = (HANDLER);
+const press = (target, key = 'Enter') => {
+  let prevented = false;
+  handler({ key, target, preventDefault() { prevented = true; } });
+  return { prevented, calls: calls.splice(0) };
+};
+const row = el('div', { cls: 'crow', cid: 'c1' });
+const inRow = (tag, o) => el(tag, o, row);
+const span = el('span', {}, inRow('button'));
+const hform = el('form', { cls: 'hform' }, row);
+console.log(JSON.stringify({
+  row: press(row),
+  rowSpace: press(row, ' '),
+  rowOther: press(row, 'a'),
+  button: press(inRow('button')),
+  inButton: press(span),
+  link: press(inRow('a')),
+  input: press(inRow('input')),
+  select: press(inRow('select')),
+  textarea: press(inRow('textarea')),
+  hformEsc: (S.addH = { cid: 'c1', value: '' }, press(el('input', {}, hform), 'Escape')),
+  hformEnter: press(el('input', {}, hform)),
+}));
+""".replace("HANDLER", _clist_keydown_src(_takeoff_js()))
+    r = subprocess.run([node, "-e", script], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["row"] == {"prevented": True, "calls": [["setCond", "c1"]]}  # the focused row still picks its condition on Enter
+    assert out["rowSpace"] == out["rowOther"] == {"prevented": False, "calls": []}
+    for name in ("button", "inButton", "link", "input", "select", "textarea"):  # a control inside the row keeps its own Enter
+        assert out[name] == {"prevented": False, "calls": []}, name
+    assert out["hformEsc"] == {"prevented": True, "calls": ["renderConds"]}  # the + Height form's Esc / Enter handling is untouched
+    assert out["hformEnter"] == {"prevented": False, "calls": []}
