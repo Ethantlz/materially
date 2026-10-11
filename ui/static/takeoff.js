@@ -55,6 +55,26 @@ const colorOf = (cid) => cond(cid)?.color || "#8a919d";
 const shortName = (c) => String(c.name || "").replace(new RegExp("^" + String(c.type_tag).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[-–:]\\s*"), "");
 const sizePt = () => sheet()?.size_pt || [S.iw / S.ips, S.ih / S.ips];
 
+// A wall condition's finished thickness in inches: studs.size_in + sides * (sum of layers_each_side[].thickness_in), with
+// sides defaulting to 2. The page ships a condition's materials too, so a view without studs / layers_each_side is read
+// from those (the board row says "N layers each side"). null when it can't be told: the shape keeps its thin line.
+function wallThicknessIn(c) {
+  if (!c) return null;
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  let stud = num(c.studs && c.studs.size_in), board = 0, sides = c.sides;
+  if (stud && Array.isArray(c.layers_each_side)) board = c.layers_each_side.reduce((s, l) => s + num(l && l.thickness_in), 0);
+  else {
+    const mats = Array.isArray(c.materials) ? c.materials : [];
+    stud = num((mats.find((m) => m && m.role === "stud") || {}).size_in);
+    for (const m of mats) if (m && m.role === "board") {
+      const n = /(\d+)\s+layers?/i.exec(m.desc || "");
+      board += num(m.thickness_in) * (n ? +n[1] : 1);
+      if (sides == null) sides = m.sides;
+    }
+  }
+  return stud ? stud + (sides === 1 ? 1 : 2) * board : null;
+}
+
 // ---------------------------------------------------------------- coordinates and view
 const vpRect = () => vp.getBoundingClientRect();
 function toPt(cx, cy) {
@@ -161,6 +181,7 @@ async function reloadData(force = false) {
   S.sheets = r.data.sheets; S.conds = r.data.conditions; S.job = { ...S.job, ...r.data.job };
   if (!S.sheetId && S.sheets.length) S.sheetId = (S.sheets.find((s) => s.image_path) || S.sheets[0]).id;
   renderSheetSelect(); renderConds(); renderToolbar(); renderQty();
+  renderMeas(); renderDraft();  // a wall's width follows the sheet's scale and the condition's build, so a change to either redraws the canvas
   const now = sheet();
   if (now && (!before || before.id !== now.id || before.image_path !== now.image_path)) { loadImage(); refresh(); }
   return true;
@@ -278,7 +299,7 @@ function renderQty() {
   empty.hidden = !!rows.length;
   empty.textContent = !S.qtyOk
     ? "The quantities endpoint isn't answering yet, so nothing can be totalled. It lands with the pipeline lane."
-    : "No measurements yet. Pick a condition on the left, press L, and click along a wall.";
+    : "No measurements yet. Pick a condition on the left, press L, and drag along a wall.";
   const cell = (v, d, cls = "") => `<td class="num ${v ? "" : "zero"} ${cls}">${v ? fmtNum(v, d) : "—"}</td>`;
   $("#qty-body").innerHTML = rows.map(({ c, q }) => `<tr data-testid="qty-row" data-cid="${c.id}">
     <td style="white-space:nowrap"><span class="swatch" style="background:${esc(c.color)}"></span><b>${esc(c.type_tag)}</b> <span class="muted">${esc(shortName(c))}</span></td>
@@ -296,9 +317,17 @@ function labelFor(m) {
   if (m.kind === "area") return fmtNum(m.quantity, 0) + " SF";
   return "";
 }
+// Stroke width, in image px, for a linear shape of condition c on sheet sid: the wall's real thickness at that sheet's
+// scale (inches / 12 * pt_per_ft = PDF points), then the same pt -> image px factor the points use (S.ips), so the band
+// zooms exactly like the geometry. null (keep the thin line) when the thickness or the sheet's scale is unknown.
+function wallPx(c, sid) {
+  const t = wallThicknessIn(c), ppf = ptPerFt(sid);
+  return t && ppf ? (t / 12) * ppf * S.ips : null;
+}
 function measNode(m) {
   const c = colorOf(m.condition_id), P = m.points.map(toImg), pts = P.map((p) => p.join(",")).join(" ");
-  const g = svgEl("g", { class: `m ${m.kind}${m.id === S.sel ? " sel" : ""}${m.pending ? " pending" : ""}`, "data-mid": m.id, "data-testid": "measurement" });
+  const wall = m.kind === "linear" ? wallPx(cond(m.condition_id), m.sheet) : null;
+  const g = svgEl("g", { class: `m ${m.kind}${wall ? " banded" : ""}${m.id === S.sel ? " sel" : ""}${m.pending ? " pending" : ""}`, "data-mid": m.id, "data-testid": "measurement" });
   if (m.kind === "count") {
     P.forEach((p, i) => {
       svgEl("circle", { cx: p[0], cy: p[1], class: "pin", fill: c }, g);
@@ -307,7 +336,9 @@ function measNode(m) {
     return g;
   }
   const tag = m.kind === "area" ? "polygon" : "polyline";
-  svgEl(tag, { points: pts, class: "hit" }, g);
+  // a banded wall is also grabbed across its whole width, not just along the 16 px strip around its centreline
+  svgEl(tag, wall ? { points: pts, class: "hit", style: `stroke-width:max(calc(16px*var(--inv)),${wall}px)` } : { points: pts, class: "hit" }, g);
+  if (wall) svgEl("polyline", { points: pts, class: "band", stroke: c, "stroke-width": wall }, g);
   svgEl(tag, { points: pts, class: "vis", stroke: c, fill: m.kind === "area" ? c : "none" }, g);
   if (m.id === S.sel) P.forEach((p) => svgEl("circle", { cx: p[0], cy: p[1], class: "dot", stroke: c }, g));
   // label: middle of the longest run for lines, centroid for areas
@@ -347,11 +378,13 @@ function renderDraft() {
   if (!d || d.sheet !== S.sheetId) { readout.hidden = true; updateNumbers(); renderQty(); return updateHint(); }
   const c = colorOf(d.cond), P = d.points.map(toImg), cur = S.cur && d.kind !== "count" ? toImg(S.cur) : null;
   const all = cur ? [...P, cur] : P;
+  const wall = d.kind === "linear" ? wallPx(cond(d.cond), d.sheet) : null, thin = wall ? " banded" : "";  // the preview is drawn at the wall's width too
   if (d.kind === "area" && all.length >= 3) svgEl("polygon", { points: all.map((p) => p.join(",")).join(" "), class: "vis area", fill: c, stroke: "none" }, gDraft);
   if (d.kind === "count") P.forEach((p) => { svgEl("circle", { cx: p[0], cy: p[1], class: "pin", fill: c, style: "r:calc(8px*var(--inv));stroke:#fff;stroke-width:calc(2px*var(--inv))" }, gDraft); });
   else {
-    if (P.length > 1) svgEl("polyline", { points: P.map((p) => p.join(",")).join(" "), class: "vis", stroke: c }, gDraft);
-    if (cur && P.length) svgEl("line", { x1: P[P.length - 1][0], y1: P[P.length - 1][1], x2: cur[0], y2: cur[1], class: "vis rubber", stroke: c }, gDraft);
+    if (wall && all.length > 1) svgEl("polyline", { points: all.map((p) => p.join(",")).join(" "), class: "band", stroke: c, "stroke-width": wall }, gDraft);
+    if (P.length > 1) svgEl("polyline", { points: P.map((p) => p.join(",")).join(" "), class: "vis" + thin, stroke: c }, gDraft);
+    if (cur && P.length) svgEl("line", { x1: P[P.length - 1][0], y1: P[P.length - 1][1], x2: cur[0], y2: cur[1], class: "vis rubber" + thin, stroke: c }, gDraft);
     if (cur && d.kind === "area" && P.length >= 2) svgEl("line", { x1: cur[0], y1: cur[1], x2: P[0][0], y2: P[0][1], class: "vis rubber", stroke: c, opacity: ".55" }, gDraft);
     if (d.kind === "area" && P.length >= 3) svgEl("circle", { cx: P[0][0], cy: P[0][1], class: "first", stroke: c }, gDraft);
     P.forEach((p) => svgEl("circle", { cx: p[0], cy: p[1], class: "dot", stroke: c }, gDraft));
@@ -359,7 +392,7 @@ function renderDraft() {
   const m = draftMetrics();
   if (S.cursor && m) {
     readout.hidden = false;
-    readout.innerHTML = d.kind === "linear" && m.segText ? `${esc(m.text)}<small>+${esc(m.segText)}</small>` : esc(m.text);
+    readout.innerHTML = d.kind === "linear" && m.segText && !d.drag ? `${esc(m.text)}<small>+${esc(m.segText)}</small>` : esc(m.text);
     readout.style.left = S.cursor[0] + "px"; readout.style.top = S.cursor[1] + "px";
   } else readout.hidden = true;
   updateNumbers(); renderQty(); updateHint();
@@ -397,8 +430,8 @@ function updateHint() {
   else {
     const m = S.draft ? draftMetrics() : null;
     html = `<span class="dot" style="background:${esc(c.color)}"></span><b>${esc(c.type_tag)}</b> <span class="dim">· ${KIND_NAME[S.tool]}</span>` +
-      (m ? ` · <b>${esc(m.text)}</b> <span class="dim">${m.unit === "lf" ? fmtNum(m.qty, 2) + " LF · " : ""}Enter to finish · Esc ${S.draft.points.length >= MIN_PTS[S.draft.kind] ? "saves" : "cancels"}</span>`
-        : ` <span class="dim">· ${S.tool === "count" ? "click each item, Enter to finish" : S.tool === "area" ? "click the corners, double-click to close" : "click along the wall, double-click to finish"}</span>`);
+      (m ? ` · <b>${esc(m.text)}</b> <span class="dim">${m.unit === "lf" ? fmtNum(m.qty, 2) + " LF · " : ""}${S.draft.drag ? "release to place the wall · Esc cancels" : `Enter to finish · Esc ${S.draft.points.length >= MIN_PTS[S.draft.kind] ? "saves" : "cancels"}`}</span>`
+        : ` <span class="dim">· ${S.tool === "count" ? "click each item, Enter to finish" : S.tool === "area" ? "click the corners, double-click to close" : "Drag along a wall to draw it; click to chain points."}</span>`);
   }
   if (!S.measOk && sh) html += ` <span class="dim">· measurements for this sheet couldn't load</span>`;
   hintEl.innerHTML = html;
@@ -420,14 +453,36 @@ function flash(el) { el.classList.remove("flash"); void el.offsetWidth; el.class
 function needCondition() { toast("Pick a condition on the left first.", true); flash($("#panel")); }
 function needScale() { toast("Set or calibrate this sheet's scale first.", true); flash($("#noscale")); }
 
-function snap(p) {  // shift: constrain the next point to 45 degree steps from the last
+function snap(p) {  // shift: constrain the next point to 45 degree steps from the last (a dragged wall: to horizontal / vertical)
   const d = S.draft;
   if (!S.shift || !d || !d.points.length || d.kind === "count") return p;
   const a = d.points[d.points.length - 1], dx = p[0] - a[0], dy = p[1] - a[1], len = Math.hypot(dx, dy);
+  if (d.drag) return Math.abs(dx) >= Math.abs(dy) ? [p[0], a[1]] : [a[0], p[1]];
   const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
   return [a[0] + len * Math.cos(ang), a[1] + len * Math.sin(ang)];
 }
 function pointAt(e) { return clampPt(snap(toPt(e.clientX, e.clientY))); }
+
+// Press-drag-release draws one wall. A press is only a click until the pointer travels more than 4 screen px; then a
+// draft (condition, sheet and alternate tagged like any other draft, plus drag: true) previews the wall until release,
+// and release saves it through finishDraft. d is the S.down record of the press.
+function startDrag(d) {
+  d.started = true;
+  const c = cond();
+  if (!c) { d.draw = false; return needCondition(); }
+  if (!ptPerFt()) { d.draw = false; return needScale(); }
+  S.draft = { kind: "linear", points: [d.start], cond: c.id, sheet: S.sheetId, alt: S.altId, drag: true };
+}
+function endDrag(e, d) {
+  const dr = S.draft;
+  if (!d.draw || !dr || !dr.drag) return;  // refused for want of a condition or scale, or Esc / right-click / undo cancelled it mid-drag
+  S.shift = e.shiftKey;
+  const end = pointAt(e);  // snapped to horizontal / vertical while Shift is held
+  dr.drag = false;
+  if (Math.hypot(e.clientX - d.x, e.clientY - d.y) <= 4 || dist(dr.points[0], end) <= 0) return cancelDraft();  // dragged back to where it started
+  dr.points.push(end); S.cur = null;
+  finishDraft();
+}
 
 function addPoint(p) {
   const c = cond();
@@ -568,8 +623,11 @@ vp.addEventListener("pointerdown", (e) => {
   if (e.button === 2) return;
   vp.setPointerCapture(e.pointerId);
   const mid = e.target.closest("[data-mid]");
+  const pan = e.button === 1 || S.space || (S.tool === "select" && e.button === 0 && !mid);
+  // With the linear tool and nothing chained yet, press-drag-release draws one wall; a press that barely moves stays a click.
+  const draw = !pan && e.button === 0 && S.tool === "linear" && S.loaded && !S.draft;
   S.down = { x: e.clientX, y: e.clientY, btn: e.button, tx: S.tx, ty: S.ty, moved: false, mid: mid ? mid.dataset.mid : null,
-    pan: e.button === 1 || S.space || (S.tool === "select" && e.button === 0 && !mid) };
+    pan, draw, started: false, start: draw ? clampPt(toPt(e.clientX, e.clientY)) : null };
   if (e.button === 1) e.preventDefault();
 });
 vp.addEventListener("pointermove", (e) => {
@@ -580,6 +638,7 @@ vp.addEventListener("pointermove", (e) => {
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (!d.moved && Math.hypot(dx, dy) > 4) d.moved = true;
     if (d.pan && d.moved) { S.tx = d.tx + dx; S.ty = d.ty + dy; S.fitted = false; vp.classList.add("panning"); applyView(); renderDraft(); return; }
+    if (d.draw && d.moved && !d.started) startDrag(d);
   }
   if (S.loaded && (S.draft || (S.cal && !S.cal.p2))) { S.cur = pointAt(e); renderDraft(); if (S.cal) renderCal(); }
 });
@@ -588,6 +647,8 @@ vp.addEventListener("pointerup", (e) => {
   vp.classList.remove("panning");
   if (!d || d.btn !== 0) return;
   if (d.pan && d.moved) return;
+  if (d.draw && !d.started && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) startDrag(d);  // released far from the press with no move event between
+  if (d.started) return endDrag(e, d);  // the press became a dragged wall
   if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
   if (!S.loaded) return;
   const p = pointAt(e);
@@ -595,7 +656,7 @@ vp.addEventListener("pointerup", (e) => {
   else if (S.tool === "calibrate") calPoint(p);
   else addPoint(p);
 });
-vp.addEventListener("pointercancel", () => { S.down = null; vp.classList.remove("panning"); });
+vp.addEventListener("pointercancel", () => { S.down = null; vp.classList.remove("panning"); if (S.draft && S.draft.drag) cancelDraft(); });
 vp.addEventListener("pointerleave", () => { if (!S.down) { readout.hidden = true; } });
 vp.addEventListener("dblclick", (e) => {
   if (e.target.closest(".hint, .banner, .pop, .menu") || !S.draft) return;

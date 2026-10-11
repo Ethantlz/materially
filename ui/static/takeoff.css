@@ -60,6 +60,14 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--accent)
 .m.area .vis { fill-opacity: .2; } .m.area .hit { fill: transparent; pointer-events: all; }
 .m:hover .vis { stroke-width: calc(4.4px * var(--inv)); }
 .m.sel .vis { stroke-width: calc(4.6px * var(--inv)); }
+/* A linear shape drawn at its wall's real width: a translucent square-ended band (its width is set per shape, in image px,
+   so it zooms with the sheet) under a thin centreline in the full colour. The hover and selected rules here are more
+   specific than the plain ones above, so the centreline stays thin on a wall; selected comes last and wins. */
+.band { fill: none; stroke-opacity: .35; stroke-linecap: butt; stroke-linejoin: miter; pointer-events: none; }
+.m.banded .vis, .draft .vis.banded { stroke-width: calc(1.5px * var(--inv)); }
+.m.banded:hover .vis { stroke-width: calc(2.2px * var(--inv)); }
+.m.banded.sel .vis { stroke-width: calc(2.6px * var(--inv)); }
+.m.banded:hover .band, .m.banded.sel .band { stroke-opacity: .5; }
 .m.pending { opacity: .65; }
 .m .dot { r: calc(4.5px * var(--inv)); fill: #fff; stroke-width: calc(2px * var(--inv)); }
 .m .pin { r: calc(8px * var(--inv)); stroke: #fff; stroke-width: calc(2px * var(--inv)); }
