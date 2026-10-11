@@ -206,3 +206,9 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - ewos-empty | /jobs/{job}/pm | empty row of the PM page's field EWOs table
 - drawer-orders | /jobs/{job}/takeoff | the quantities drawer's "Orders →" link: opens the orders popup (full-page orders list where the popup script is missing)
 - material-error | /jobs/{job}/takeoff | why "Find product" failed, shown in that material row until the next try (js)
+- open-sources | /jobs/{job}/takeoff | opens the Suppliers popup
+- sources-panel | /ui/panel/sources | the Suppliers popup: the supplier sites product searches look on
+- source-row | /ui/panel/sources | one supplier site (only when a supplier has been added)
+- sources-empty | /ui/panel/sources | empty row of the supplier table (only when there are none)
+- source-add | /ui/panel/sources | form that adds a supplier site
+- source-url | /ui/panel/sources | address of the supplier site to add

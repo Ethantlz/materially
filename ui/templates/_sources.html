@@ -1,0 +1,63 @@
+<div data-testid="sources-panel">
+<div class="pagehead">
+  <h1>Suppliers</h1>
+  <p class="muted">Product searches look only on these supplier sites. With none listed, they search the whole web.</p>
+</div>
+
+<table class="tbl">
+  <thead><tr><th>Supplier</th><th>Name</th><th>Site</th><th></th></tr></thead>
+  <tbody>
+  {% for s in sources %}
+  <tr data-testid="source-row">
+    <td><b>{{ s.domain }}</b></td>
+    <td class="muted">{{ s.name or "—" }}</td>
+    <td>{% if s.url.startswith("http") %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.url }}</a>{% else %}{{ s.url }}{% endif %}</td>
+    <td class="num"><button type="button" class="btn-ghost sm" data-source-del="{{ s.id }}">Remove</button></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="empty" data-testid="sources-empty">No supplier sites yet. Add one below and product searches will look only there.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<form class="row" data-testid="source-add">
+  <input class="input" name="url" placeholder="https://www.usg.com" data-testid="source-url" required>
+  <input class="input" name="name" placeholder="Name (optional)">
+  <button class="btn" type="submit">Add supplier</button>
+</form>
+</div>
+<script data-init>
+(() => {
+  // In the takeoff's modal a fresh panel replaces this one; where the modal script isn't loaded it reloads.
+  const refresh = () => (window.Modal ? Modal.open("Suppliers", "/ui/panel/sources") : location.reload());
+
+  function bind() {
+    const form = document.querySelector('[data-testid="source-add"]');
+    if (form) form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector("button");
+      const url = form.querySelector('[name="url"]').value.trim();
+      const name = form.querySelector('[name="name"]').value.trim();
+      if (!url) return;
+      btn.disabled = true; btn.textContent = "Adding…";
+      const r = await call("POST", ["/api/product-sources"], { url, name: name || null });
+      if (!r.ok) {
+        toast(errText(r, "Couldn't add that supplier"), true);
+        btn.disabled = false; btn.textContent = "Add supplier";
+        return;
+      }
+      refresh();
+    });
+
+    document.querySelectorAll("[data-source-del]").forEach((b) => b.addEventListener("click", async () => {
+      b.disabled = true;
+      const r = await call("DELETE", ["/api/product-sources/" + b.dataset.sourceDel]);
+      if (!r.ok) { toast(errText(r, "Couldn't remove that supplier"), true); b.disabled = false; return; }
+      refresh();
+    }));
+  }
+
+  // In the modal api.js is already loaded; as a fragment of its own this inline script runs before it.
+  if (window.call) bind(); else document.addEventListener("DOMContentLoaded", bind);
+})();
+</script>
