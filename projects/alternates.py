@@ -68,8 +68,9 @@ def delete_alternate(alt_id: str) -> None:
     db, a = get_db(), _get(alt_id)
     if a["kind"] == "base":
         raise InUse("The base bid can't be deleted.")
-    if db.measurements.count_documents({"alternate_id": alt_id}, limit=1):
-        raise InUse("This alternate has measurements. Delete them first.")
+    f = {"alternate_id": alt_id}
+    if db.measurements.count_documents(f, limit=1) or db.orders.count_documents(f, limit=1):
+        raise InUse("This alternate has measurements or orders. Delete them first.")
     db.alternates.delete_one({"_id": a["_id"]})
 
 

@@ -42,6 +42,17 @@ def test_base_cannot_be_deleted_and_used_alternates_cannot_either(client, mock_d
     assert client.delete(f"/api/alternates/{a1}").status_code == 409
 
 
+def test_alternate_with_orders_cannot_be_deleted_and_unused_one_can(client, mock_db):
+    job = _job(mock_db)
+    with_order = alt.create_alternate(job, "Alternate 1")
+    unused = alt.create_alternate(job, "Alternate 2")
+    mock_db.orders.insert_one({"job_id": job, "alternate_id": with_order, "status": "built"})
+    assert client.delete(f"/api/alternates/{with_order}").status_code == 409
+    assert client.delete(f"/api/alternates/{unused}").status_code == 200
+    names = [x["name"] for x in client.get(f"/api/jobs/{job}/alternates").json()]
+    assert names == ["Base bid", "Alternate 1"]
+
+
 def test_scope_treats_missing_alternate_as_base(mock_db, monkeypatch):
     monkeypatch.setenv("DB_NAME", mock_db.name)
     job = "j1"
