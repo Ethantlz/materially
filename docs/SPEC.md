@@ -1,6 +1,6 @@
-# c0mpiled-15: build spec
+# materially: build spec
 
-What gets built after 12:00. This is a plan, not code: no file in the repo is written before 12:00. The working name is Takeoff Ledger; rename it freely.
+What gets built at c0mpiled-15 (build 12:00-19:00). The product is **materially**.
 
 ## 1. The product
 A drywall/framing back office in one app:
@@ -31,7 +31,7 @@ Every model call ─► usage ─ $group ─► "N decisions on this job: $0.0X"
 
 ## 3. Stack and repo layout
 - **Runtime:** Python 3.11+, one runtime. FastAPI, pymongo, Jinja2 templates with small vanilla JS, and EventSource (SSE) for live updates.
-- **Libraries:** pdfplumber (text and positions), pypdfium2 (page images), Playwright for the demo script.
+- **Libraries:** pypdfium2 (text segments with positions, and page images; much faster than pdfplumber on dense CAD sheets), pdfplumber as a fallback, Playwright for the demo script.
 - **Database:** MongoDB Atlas (M10 for the day, or M0).
 - **Models:**
   - Jev `typesafe/jev-1.13` via OpenRouter, TypeSafe SDK, base URL `https://openrouter.ai/api`, `POST /api/v1/systemone`. Docs: https://docs.typesafe.ai/api.md and https://openrouter.ai/docs/guides/community/typesafe-sdk.md
@@ -39,6 +39,19 @@ Every model call ─► usage ─ $group ─► "N decisions on this job: $0.0X"
   - Sonnet via the Anthropic API, used only for the retry tier.
 - **Web:** Firecrawl for search and scraping.
 - **Email:** SMTP from env, falling back to an `outbox` collection when SMTP isn't set.
+- **Infra (local, Docker, `infra/`):** `infra/up.ps1` starts self-hosted Infisical (http://localhost:8080) for keys and a LiteLLM proxy (http://localhost:4000) in front of Luminal. LiteLLM serves `deepseek-ai/DeepSeek-V4.1-Flash` capped at 30 requests/min (`infra/litellm/config.yaml`); the app holds only a LiteLLM virtual key, never the Luminal key.
+
+**How keys flow.** Keys live only in Infisical (environment `dev`); nothing secret is in the repo or on disk.
+```
+Infisical dev /          MONGODB_URI, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, FIRECRAWL_API_KEY,
+                         SMTP_*, TEST_INBOX, LITELLM_BASE_URL, LITELLM_API_KEY (virtual key)
+   └─ infisical run --env=dev -- <cmd> ─► app: DeepSeek → LiteLLM, Jev → OpenRouter, Sonnet retry → Anthropic
+Infisical dev /litellm   LUMINAL_BASE_URL, LUMINAL_API_KEY
+   └─ infra/up.ps1: infisical run --path=/litellm -- docker compose up ─► LiteLLM container → Luminal
+```
+`~/.c15/infra.env` holds only the local containers' bootstrap secrets (made by `infra/init_secrets.py`). A machine without Infisical can put the same names in `~/.c15/keys.env` (or the file named by `C15_KEYS`), which is loaded without overriding the environment.
+
+**DB_NAME rule.** Each lane has its own database: `lane1`, `lane2`, `lane3`, `h1`, `h2`; `demo` is main's (and the default). `DB_NAME` is deliberately not stored in Infisical, because `infisical run` would override a lane's value: set it in the shell first, e.g. `$env:DB_NAME = "lane2"; infisical run --env=dev -- uv run pytest tests/pipeline -q`.
 
 ```
 repo/
@@ -53,8 +66,10 @@ repo/
 Each lane exposes its own FastAPI `APIRouter` in its folder. The integrator includes every router in `main.py` once, at skeleton time.
 
 ## 4. Collections (fields are the contract)
-- **jobs**: name, created_at.
-- **sheets**: job_id, page, sheet_no, title, kind (`partition_types` | `floor_plan` | `reflected_ceiling` | `elevations` | `details` | `schedules` | `other`), routing{}, image_path.
+References between collections (`job_id`, `sheet`, `condition_id`, `room_id`, `ewo_id`) are the referenced doc's `_id` as a hex string. The validators live in `contracts/schemas.py`.
+
+- **jobs**: name, created_at, status (`uploading` | `processing` | `ready` | `error`), files [{name, pages}], pages_total, pages_named, pages_rendered, error.
+- **sheets**: job_id, page (1-based across the job), file, file_page, sheet_no, title, name_source (`bookmark` | `title_block` | `none`), kind (`partition_types` | `floor_plan` | `reflected_ceiling` | `elevations` | `details` | `schedules` | `other`), routing{}, size_pt [w, h], scale {label, pt_per_ft, ratio, source (`title_block` | `view_title` | `bookmark` | `manual`), confidence, candidates[]}, image_path, thumb_path, image_scale (px per PDF point), created_at.
 - **conditions**: job_id, type_tag (for example "A1"), studs {size_in, gauge, spacing_in}, layers_each_side [{thickness_in, board_type}], sides (1 or 2), insulation, fire_rating, ul_assembly, stc, height_ft, source {sheet, page, bbox}, routing{}. Required: type_tag, studs, layers_each_side. Enums on gauge and board_type.
 - **rooms**: job_id, sheet, name, number, label_pt [x, y]. Index `{label_pt: "2d", sheet: 1}` with `min: 0, max: 5000`; the default bounds are ±180, too small for PDF points.
 - **ewos**: job_id, sheet, pin [x, y], room_id, description, submitted_by ("foreman, synthetic"), status, created_at.
