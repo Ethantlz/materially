@@ -3,12 +3,19 @@
 There is no JS runtime harness for the page, so the wiring is checked in the source and the two pieces of
 behaviour under test (materialsHtml and the #clist click handler) are cut out of takeoff.js and run in Node.
 """
+import html
 import json
 import shutil
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from bson import ObjectId
+from fastapi.testclient import TestClient
+
+from app.main import app
+from contracts.samples import CONDITION_ID, SAMPLES
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = ROOT / "ui" / "static"
@@ -60,7 +67,8 @@ def test_the_pull_branch_comes_before_the_other_clist_branches():
 
 def test_the_products_state_map_is_declared():
     js = _read("takeoff.js")
-    assert "productErrors" in js[js.index("const S = {"): js.index("const SPEC_FLAG")]
+    state = js[js.index("const S = {"): js.index("const SPEC_FLAG")]
+    assert "productErrors" in state and "pulling: new Set()" in state
 
 
 # ---- behaviour, run under Node ----
@@ -70,11 +78,13 @@ def _node(script: str):
     return json.loads(r.stdout)
 
 
-def _materials(c: dict, products: dict = None, errors: dict = None) -> str:
-    """Run takeoff.js's materialsHtml over these condition/products/errors (both maps keyed by condition id)."""
+def _materials(c: dict, products: dict = None, errors: dict = None, pulling: list = None) -> str:
+    """Run takeoff.js's materialsHtml over these condition/products/errors (both maps keyed by condition id).
+
+    `pulling` is the list of condition ids with a Pull product data request in flight (S.pulling)."""
     src = _fn(_read("takeoff.js"), "function materialsHtml(c) {")
     return _node(f"""
-const S = {{ products: {json.dumps(products or {})}, productErrors: {json.dumps(errors or {})} }};
+const S = {{ products: {json.dumps(products or {})}, productErrors: {json.dumps(errors or {})}, pulling: new Set({json.dumps(pulling or [])}) }};
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }}[ch]));
 const SPEC_FLAG = 0.7;
 const fn = new Function('S', 'esc', 'SPEC_FLAG', {json.dumps("return (" + src + ");")})(S, esc, SPEC_FLAG);
@@ -120,16 +130,21 @@ def test_an_unchecked_product_is_pilled_and_a_pull_error_sits_under_its_row():
     assert html.count('data-testid="material-error"') == 1  # not on the row that found a product
 
 
-def _pull(result: dict) -> dict:
-    """Run the #clist click handler against the Pull product data button and report what it did."""
+def _pull(result: dict, saved: dict = None) -> dict:
+    """Run the #clist click handler against the Pull product data button and report what it did.
+
+    `saved` is what GET /api/conditions/{cid}/products answers (the refetch after a stopped pull)."""
     src = _handler(_read("takeoff.js"), '$("#clist").addEventListener("click", ')
     return _node(f"""
 const calls = [], seen = [];
 const btn = {{ disabled: false, textContent: 'Pull product data', dataset: {{ pull: 'c1' }} }};
-const S = {{ products: {{}}, productErrors: {{}} }};
+const S = {{ products: {{}}, productErrors: {{}}, pulling: new Set() }};
 const stubs = {{
   S, btn,
-  Takeoff: {{ procure: async (cid) => {{ seen.push([cid, btn.disabled, btn.textContent]); return {json.dumps(result)}; }} }},
+  Takeoff: {{
+    procure: async (cid) => {{ seen.push([cid, btn.disabled, btn.textContent, [...S.pulling]]); return {json.dumps(result)}; }},
+    products: async (cid) => {{ calls.push(['products', cid]); return {json.dumps(saved or {"ok": True, "data": []})}; }},
+  }},
   cond: () => ({{ id: 'c1', materials: [{{ key: 'studs' }}, {{ key: 'board' }}, {{ key: 'tape' }}] }}),
   errText: (r, fallback) => (r.data && r.data.detail) || fallback,
   toast: (m, bad) => calls.push(['toast', m, !!bad]),
@@ -144,7 +159,7 @@ const e = {{ target: {{ closest: (sel) => (sel === '[data-pull]' ? btn : null) }
 (async () => {{
   await handler(e);
   console.log(JSON.stringify({{ seen, calls, products: S.products, errors: S.productErrors,
-                               disabled: btn.disabled, text: btn.textContent }}));
+                               pulling: [...S.pulling], disabled: btn.disabled, text: btn.textContent }}));
 }})();
 """)
 
@@ -154,7 +169,8 @@ def test_a_successful_pull_merges_products_and_counts_them_against_the_materials
     out = _pull({"ok": True, "data": {"products": [{"id": "p1", "url": "https://a.test/1", "title": "One"},
                                                    {"id": "p2", "url": "https://a.test/2", "title": "Two"}],
                                       "errors": {"tape": "No supplier matched this tape."}}})
-    assert out["seen"] == [["c1", True, "Pulling…"]]  # off and renamed while the search runs
+    assert out["seen"] == [["c1", True, "Pulling…", ["c1"]]]  # off, renamed and flagged while the search runs
+    assert out["pulling"] == []  # and the flag is cleared again once it answers
     assert sorted(out["products"]["c1"]) == ["p1", "p2"]  # keyed by product id
     assert out["errors"]["c1"] == {"tape": "No supplier matched this tape."}
     assert ["toast", "Found 2 of 3 products", False] in out["calls"]
@@ -166,4 +182,115 @@ def test_a_refused_pull_says_why_and_gives_the_button_back():
     out = _pull({"ok": False, "status": 409, "data": {"detail": "Product search needs a Firecrawl key (FIRECRAWL_API_KEY in Infisical)."}})
     assert ["toast", "Product search needs a Firecrawl key (FIRECRAWL_API_KEY in Infisical).", True] in out["calls"]
     assert out["disabled"] is False and out["text"] == "Pull product data"
-    assert ["reload", True] not in out["calls"]
+    assert out["products"] == {"c1": {}} and out["errors"] == {}  # nothing was saved, nothing is flagged under a material
+    assert out["pulling"] == []
+
+
+@pytest.mark.skipif(not NODE, reason="node isn't installed")
+def test_a_stopped_pull_still_shows_what_it_saved():
+    # a 502 (Firecrawl blocked) stops the search, but the products found before it are saved and linked to their materials
+    out = _pull({"ok": False, "status": 502, "data": {"detail": "Firecrawl refused the request (out of credits)."}},
+                saved={"ok": True, "data": [{"id": "p1", "url": "https://a.test/1", "title": "One"}]})
+    assert ["toast", "Firecrawl refused the request (out of credits).", True] in out["calls"]
+    assert ["products", "c1"] in out["calls"]  # refetched ...
+    assert list(out["products"]["c1"]) == ["p1"] and out["products"]["c1"]["p1"]["title"] == "One"  # ... keyed by id
+    assert ["reload", True] in out["calls"]  # the materials now point at what was saved
+    toast_at, products_at, reload_at = (out["calls"].index(c) for c in (
+        ["toast", "Firecrawl refused the request (out of credits).", True], ["products", "c1"], ["reload", True]))
+    assert toast_at < products_at < reload_at  # say why first, then show what there is
+    assert out["disabled"] is False and out["text"] == "Pull product data"  # and the button comes back
+    assert out["pulling"] == []
+
+
+@pytest.mark.skipif(not NODE, reason="node isn't installed")
+def test_a_stopped_pull_keeps_the_products_it_already_had_if_the_refetch_fails():
+    out = _pull({"ok": False, "status": 502, "data": {"detail": "rate limited"}}, saved={"ok": False, "status": 0, "data": {}})
+    assert out["products"] == {} and ["reload", True] in out["calls"]
+    assert out["disabled"] is False and out["pulling"] == []
+
+
+@pytest.mark.skipif(not NODE, reason="node isn't installed")
+def test_one_pull_per_condition_at_a_time():
+    """While a pull is in flight a re-render (the 6 s poll) keeps the button off and a second click never reaches the server."""
+    mat_src = _fn(_read("takeoff.js"), "function materialsHtml(c) {")
+    src = _handler(_read("takeoff.js"), '$("#clist").addEventListener("click", ')
+    out = _node(f"""
+const calls = [], rendered = [];
+const btn = {{ disabled: false, textContent: 'Pull product data', dataset: {{ pull: 'c1' }} }};
+const S = {{ products: {{}}, productErrors: {{}}, pulling: new Set() }};
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }}[ch]));
+const materialsHtml = new Function('S', 'esc', 'SPEC_FLAG', {json.dumps("return (" + mat_src + ");")})(S, esc, 0.7);
+const COND = {{ id: 'c1', materials: [{{ key: 'studs', desc: 'studs' }}] }};
+let finish;
+const stubs = {{
+  S, btn,
+  Takeoff: {{
+    procure: (cid) => {{ calls.push(['procure', cid]); return new Promise((res) => {{ finish = res; }}); }},
+    products: async () => ({{ ok: true, data: [] }}),
+  }},
+  cond: () => COND,
+  errText: (r, fallback) => fallback,
+  toast: () => {{}},
+  reloadData: async () => true,
+}};
+const scope = new Proxy({{}}, {{
+  has: (_, n) => typeof n === 'string' && (n in stubs || !(n in globalThis)),
+  get: (_, n) => (n in stubs ? stubs[n] : () => {{}}),
+}});
+const handler = new Function('scope', {json.dumps('with (scope) { return (' + src + '); }')})(scope);
+const e = {{ target: {{ closest: (sel) => (sel === '[data-pull]' ? btn : null) }} }};
+(async () => {{
+  const first = handler(e);                 // pull starts, never answers until `finish`
+  rendered.push(materialsHtml(COND));       // the poll re-renders mid-pull
+  await handler(e);                         // a second click on the (re-rendered) button
+  await handler(e);
+  const during = [...calls];
+  finish({{ ok: true, data: {{ products: [], errors: {{}} }} }});
+  await first;
+  rendered.push(materialsHtml(COND));       // and after it answered
+  const again = handler(e);                 // a new pull is allowed again
+  const next = {{ calls: [...calls], pulling: [...S.pulling] }};
+  finish({{ ok: true, data: {{ products: [], errors: {{}} }} }});
+  await again;
+  console.log(JSON.stringify({{ during, rendered, next, pulling: [...S.pulling] }}));
+}})();
+""")
+    assert out["during"] == [["procure", "c1"]]  # the second and third click never called procure
+    mid, after = out["rendered"]
+    assert 'data-pull="c1"' in mid and " disabled" in mid and ">Pulling…</button>" in mid
+    assert "Pull product data</button>" not in mid
+    assert " disabled" not in after and ">Pull product data</button>" in after
+    assert out["next"] == {"calls": [["procure", "c1"], ["procure", "c1"]], "pulling": ["c1"]}  # once the first answered, a new pull goes out
+    assert out["pulling"] == []
+
+
+@pytest.mark.skipif(not NODE, reason="node isn't installed")
+def test_materials_html_disables_the_button_only_for_the_condition_being_pulled():
+    html = _materials(COND, pulling=["c1"])
+    assert "disabled" in html and "Pulling…" in html and "Pull product data" not in html
+    other = _materials(COND, pulling=["c2"])
+    assert "disabled" not in other and "Pull product data" in other
+
+
+# ---- the condition page (server-rendered) ----
+@pytest.fixture
+def client(mock_db, monkeypatch):
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    for name, doc in SAMPLES.items():
+        if name not in ("price_book", "model_policy"):  # mock_db is already seeded with these
+            mock_db[name].insert_one(deepcopy(doc))
+    return TestClient(app)
+
+
+def test_the_condition_page_only_links_http_product_urls(client, mock_db):
+    # product urls are scraped from supplier pages: an href must never carry a javascript:/data: scheme
+    for component, url, title in (("stud", "javascript:alert(1)", "Evil sheet"), ("track", "data:text/html,<b>x</b>", "Data sheet"),
+                                  ("screw", "javascript:alert(2)", None), ("tape", "http://plain.test/tape.pdf", "Plain tape")):
+        mock_db.product_data.insert_one(deepcopy(SAMPLES["product_data"]) | {
+            "_id": ObjectId(), "query_hash": f"q-{component}", "component": component, "url": url, "title": title})
+    page = html.unescape(client.get(f"/conditions/{CONDITION_ID}").text)
+    assert "javascript:" not in page and 'href="data:' not in page  # not as a link, and not echoed as text either
+    assert "Evil sheet" in page and "Data sheet" in page  # the title still shows, as plain text
+    assert '<a href="http://plain.test/tape.pdf"' in page and "Plain tape" in page
+    assert '<a href="https://example.com/5-8-type-x-data-sheet.pdf"' in page  # the seeded https product keeps its link
+    assert page.count('data-testid="product-row"') == 5
