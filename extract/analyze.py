@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from bson import ObjectId
 from pymongo.database import Database
+from pymongo.errors import WriteError
 
 from app import jev, router
 from app.db import insert_or_review, oid, to_review
@@ -77,7 +78,10 @@ def sort_sheet(db: Database, job_id: str, sheet: dict) -> str:
 
 
 def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectId | None:
-    """One type tag's block -> a conditions doc, or a review_queue row (model failed, or MongoDB rejected it)."""
+    """One type tag's block -> a conditions doc, or a review_queue row (model failed, or MongoDB rejected it).
+
+    A re-parse of the same (job_id, type_tag) updates the condition in place, so measurements that point at
+    it keep their condition; a name or colour a person edited is kept."""
     sheet_id = str(sheet["_id"])
     try:
         with _task_slots:
@@ -97,7 +101,16 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
         "materials": derive(out["result"], block.text),
         "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
     }
-    return insert_or_review(db, "conditions", doc, "extract.partition")
+    existing = db.conditions.find_one({"job_id": job_id, "type_tag": doc.get("type_tag")}, {"name": 1, "color": 1})
+    if existing is None:
+        return insert_or_review(db, "conditions", doc, "extract.partition")
+    keep = {k: existing[k] for k in ("name", "color") if existing.get(k)}  # what a person may have edited
+    try:
+        db.conditions.replace_one({"_id": existing["_id"]}, {**doc, **keep})
+    except WriteError as e:  # the validator rejected the re-parse: keep the old condition, park the new one
+        to_review(db, "extract.partition", {**doc, "job_id": job_id}, str(e))
+        return None
+    return existing["_id"]
 
 
 def parse_blocks(db: Database, job_id: str, sheet: dict, blocks: list[Block]) -> list[ObjectId | None]:
