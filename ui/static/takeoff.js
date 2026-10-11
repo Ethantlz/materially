@@ -616,6 +616,7 @@ hintEl.addEventListener("click", (e) => { if (e.target.id === "clear-focus") cle
 document.addEventListener("keydown", (e) => {
   const t = e.target, typing = /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable;
   if (e.key === "Shift") { S.shift = true; if (S.draft) { S.cur = S.cur && snap(S.cur); renderDraft(); } return; }
+  if (document.querySelector("dialog[open]")) return; // a popup is up: its own keys (Esc, Space on a button, Delete in a field) are not the canvas's
   if (typing) return;
   if (e.key === " ") { if (t.tagName === "BUTTON") t.blur(); S.space = true; vp.classList.add("space"); e.preventDefault(); return; }
   const k = e.key.toLowerCase();
@@ -635,7 +636,7 @@ document.addEventListener("keydown", (e) => {
 });
 document.addEventListener("keyup", (e) => {
   if (e.key === "Shift") { S.shift = false; if (S.draft) renderDraft(); }
-  if (e.key === " ") { S.space = false; vp.classList.remove("space"); if (document.activeElement?.tagName === "BUTTON") e.preventDefault(); }
+  if (e.key === " ") { S.space = false; vp.classList.remove("space"); if (!document.querySelector("dialog[open]") && document.activeElement?.tagName === "BUTTON") e.preventDefault(); }
 });
 window.addEventListener("blur", () => { S.space = false; S.shift = false; vp.classList.remove("space"); });
 
@@ -758,14 +759,11 @@ $("#qty-body").addEventListener("click", async (e) => {
   const cid = btn.dataset.order, c = cond(cid), q = S.qty.get(cid) || running(cid);
   btn.disabled = true; btn.textContent = "Creating…";
   const r = await Takeoff.createOrder(S.job.id, cid, Math.round((q.lf || 0) * 10) / 10, c?.height_ft || 10, S.altId);
-  if (r.ok && r.orderId) {
-    // the order opens in the takeoff's popup; without modals.js (an older page) fall back to the order page
-    if (window.Modal) Modal.open("Order", "/ui/orders/" + r.orderId + "/panel");
-    else location.href = "/orders/" + r.orderId;
-    return;
-  }
+  // without modals.js (an older page) the order page replaces this one, so the button stays off while it loads
+  if (r.ok && r.orderId && !window.Modal) { location.href = "/orders/" + r.orderId; return; }
+  btn.disabled = false; btn.textContent = "Create order"; // usable again however this ends: the popup closes back onto this row
+  if (r.ok && r.orderId) return void Modal.open("Order", "/ui/orders/" + r.orderId + "/panel");
   toast(errText(r, "Couldn't create the order."), true);
-  btn.disabled = false; btn.textContent = "Create order";
 });
 
 // calibrate popover and the no-scale banner

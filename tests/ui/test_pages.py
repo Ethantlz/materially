@@ -157,8 +157,47 @@ def test_order_panel_has_lines_guard_and_send(client):
 
 
 def test_tracking_lists_orders_and_ewos(client):
-    html = client.get(f"/ui/jobs/{JOB_ID}/panel/tracking").text
-    assert html.count('data-testid="tracking-row"') >= 2  # the sample order and the sample EWO
+    page = client.get(f"/ui/jobs/{JOB_ID}/panel/tracking").text
+    rows = page.split('data-testid="tracking-row"')[1:]
+    assert len(rows) == 3  # the sample order, the sent copy of it, and the sample EWO
+    ewo_rows = [r for r in rows if '<span class="badge">EWO</span>' in r]
+    assert len(ewo_rows) == 1 and html.escape(SAMPLES["ewos"]["description"][:70]) in ewo_rows[0]
+    assert sum('<span class="badge">Order</span>' in r for r in rows) == 2
+
+
+def test_orders_and_tracking_panels_follow_the_alternate(client, mock_db):
+    from contracts.samples import ALT_ID
+    from projects.alternates import create_alternate
+
+    alt = create_alternate(str(JOB_ID), "Add alt 1")
+    mock_db.orders.insert_one(deepcopy(SAMPLES["orders"]) | {"_id": ObjectId(), "alternate_id": alt, "lf": 77.7})
+    base_orders = {"": 2, f"?alt={ALT_ID}": 2, f"?alt={alt}": 1}  # no alt = the Base bid, which owns orders made before alternates
+    for query, n in base_orders.items():
+        page = client.get(f"/ui/jobs/{JOB_ID}/panel/orders{query}").text
+        assert page.count('data-testid="order-row"') == n and ("77.7" in page) == (query == f"?alt={alt}"), query
+    for query, n in {"": 3, f"?alt={ALT_ID}": 3, f"?alt={alt}": 2}.items():  # the job's one EWO shows under every alternate
+        page = client.get(f"/ui/jobs/{JOB_ID}/panel/tracking{query}").text
+        assert page.count('data-testid="tracking-row"') == n and ("77.7 LF" in page) == (query == f"?alt={alt}"), query
+
+
+def test_order_popup_links_stay_in_the_takeoff(client, mock_db):
+    popup = client.get(f"/ui/orders/{ORDER_ID}/panel").text
+    assert f'href="/jobs/{JOB_ID}/orders"' in popup  # still a plain link where nothing opens popups
+    assert f'data-modal-open="/ui/jobs/{JOB_ID}/panel/orders"' in popup and 'data-modal-title="Material orders"' in popup
+    assert 'href="/conditions/' not in popup  # the condition tag is plain text inside the popup
+    page = client.get(f"/orders/{ORDER_ID}").text
+    assert f'href="/conditions/{CONDITION_ID}"' in page  # and a link on the full page
+
+    alt = ObjectId()
+    mock_db.orders.insert_one(deepcopy(SAMPLES["orders"]) | {"_id": alt, "alternate_id": "alt-1"})
+    assert 'data-modal-open="/ui/jobs/%s/panel/orders?alt=alt-1"' % JOB_ID in client.get(f"/ui/orders/{alt}/panel").text  # back to its own list
+
+
+def test_empty_orders_popup_does_not_link_to_the_takeoff(client):
+    popup = client.get(f"/ui/jobs/{EMPTY_JOB}/panel/orders").text
+    assert 'data-testid="orders-empty"' in popup and "/takeoff" not in popup
+    page = client.get(f"/jobs/{EMPTY_JOB}/orders").text
+    assert f'href="/jobs/{EMPTY_JOB}/takeoff"' in page  # the old page keeps its link
 
 
 def test_reason_summary_reads_mongo_rejection():

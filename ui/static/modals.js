@@ -4,18 +4,28 @@
   if (!dlg) return;
   const body = () => dlg.querySelector(".modal-body");
 
+  // Each open() takes a number; a response only lands if no newer open() (or a close) has happened since it started.
+  let latest = 0;
   async function open(title, url) {
+    const mine = ++latest;
     dlg.querySelector("h2").textContent = title;
     body().innerHTML = '<div class="empty">Loading…</div>';
     if (!dlg.open) dlg.showModal();
-    const r = await fetch(url);
-    body().innerHTML = r.ok ? await r.text() : `<div class="empty">Couldn't load this (${r.status}).</div>`;
+    let html;
+    try {
+      const r = await fetch(url);
+      html = r.ok ? await r.text() : `<div class="empty">Couldn't load this (${r.status}).</div>`;
+    } catch (e) {
+      html = `<div class="empty">Couldn't load this: the server didn't answer.</div>`;
+    }
+    if (mine !== latest) return;
+    body().innerHTML = html;
     body().querySelectorAll("script[data-init]").forEach((s) => new Function(s.textContent)());
   }
   function close() { dlg.close(); }
 
   dlg.querySelector("[data-testid=modal-close]").addEventListener("click", () => close());
-  dlg.addEventListener("close", () => document.dispatchEvent(new CustomEvent("modal:closed")));
+  dlg.addEventListener("close", () => { latest++; document.dispatchEvent(new CustomEvent("modal:closed")); });
   window.Modal = { open, close };
 
   // The alternate the takeoff is showing (Task 9 sets S.altId); S is a top-level const in takeoff.js.
@@ -29,9 +39,13 @@
   bind("open-tracking", "Tracking", () => `/ui/jobs/${JOB_ID}/panel/tracking?alt=${alt()}`);
   bind("open-review", "Review queue", () => `/ui/jobs/${JOB_ID}/panel/review`);
 
-  // An order link inside a popup (the orders list, the tracking list) opens the order in the same dialog.
+  // A link inside a popup stays in the takeoff: an order link (the orders list, the tracking list) opens that order in the
+  // same dialog, and a link with data-modal-open (Order's "← Orders") opens that panel. Both keep a plain href as the
+  // full-page fallback, which only runs where this script isn't loaded.
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-order-open]");
-    if (a) { e.preventDefault(); Modal.open("Order", `/ui/orders/${a.dataset.orderOpen}/panel`); }
+    if (a) { e.preventDefault(); return Modal.open("Order", `/ui/orders/${a.dataset.orderOpen}/panel`); }
+    const l = e.target.closest("[data-modal-open]");
+    if (l) { e.preventDefault(); Modal.open(l.dataset.modalTitle || "", l.dataset.modalOpen); }
   });
 })();

@@ -61,8 +61,9 @@ def _page(request: Request, name: str, job: dict | None = None, tab: str = "", *
 
 
 def _partial(request: Request, name: str, **ctx):
-    """A fragment of a page, loaded into the takeoff screen's modal (and included by the old pages)."""
-    return templates.TemplateResponse(request, name, ctx)
+    """A fragment of a page, loaded into the takeoff screen's modal (the old pages include the same templates, without
+    `in_modal`, so a link that would leave the takeoff stays a link there and is plain text in the popup)."""
+    return templates.TemplateResponse(request, name, {"in_modal": True, **ctx})
 
 
 def _cost(db, job_id: str) -> dict:
@@ -318,8 +319,7 @@ def job_cost(job_id: str) -> dict:
 @router.get("/ui/jobs/{job_id}/panel/orders", response_class=HTMLResponse)
 def panel_orders(request: Request, job_id: str, alt: str | None = None):
     db = get_db()
-    q = {"job_id": job_id, **(scope(job_id, alt) if alt else {})}
-    orders = jsonable(list(db.orders.find(q).sort("_id", -1)))
+    orders = jsonable(list(db.orders.find({"job_id": job_id, **scope(job_id, alt)}).sort("_id", -1)))
     conds = {c["id"]: c for c in _conditions(db, job_id)}
     return _partial(request, "_orders.html", job_id=job_id, orders=orders, conditions=conds)
 
@@ -348,7 +348,7 @@ def panel_ewos(request: Request, job_id: str):
 def panel_tracking(request: Request, job_id: str, alt: str | None = None):
     db = get_db()
     rows = []
-    for o in jsonable(list(db.orders.find({"job_id": job_id, **(scope(job_id, alt) if alt else {})}))):
+    for o in jsonable(list(db.orders.find({"job_id": job_id, **scope(job_id, alt)}))):
         state = "sent" if o.get("sent_at") else ("guard tripped" if (o.get("guard") or {}).get("over") else "priced")
         rows.append({"kind": "Order", "id": o["id"], "what": f'{o.get("lf", 0):g} LF', "state": state, "total": o.get("total"),
                      "at": o.get("sent_at") or o.get("created_at")})
