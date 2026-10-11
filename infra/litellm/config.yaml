@@ -1,6 +1,12 @@
-# Models are added in the LiteLLM UI (STORE_MODEL_IN_DB) so the Luminal key is entered and rotated there,
-# never in this file. See infra/README.md for the exact fields.
-model_list: []
+# The Luminal base URL and key live in Infisical (dev, folder /litellm); infra/up.ps1 injects them with
+# `infisical run --path /litellm`, so nothing secret is in this file. Rotate the key in Infisical, then rerun up.ps1.
+model_list:
+  - model_name: deepseek-ai/DeepSeek-V4.1-Flash  # the exact name app/router.py and model_policy ask for
+    litellm_params:
+      model: openai/deepseek-ai/DeepSeek-V4.1-Flash
+      api_base: os.environ/LUMINAL_BASE_URL
+      api_key: os.environ/LUMINAL_API_KEY
+      rpm: 30
 
 litellm_settings:
   drop_params: true

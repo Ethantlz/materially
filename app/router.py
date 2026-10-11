@@ -48,7 +48,8 @@ def _openai(base_url: str, api_key: str):
 def _anthropic(api_key: str):
     import anthropic
 
-    return anthropic.Anthropic(api_key=api_key or None, timeout=120, max_retries=1)
+    # Pin the URL: a stray ANTHROPIC_BASE_URL in the shell (Claude Code sets one) must not reroute the retry tier.
+    return anthropic.Anthropic(api_key=api_key or None, base_url="https://api.anthropic.com", timeout=120, max_retries=1)
 
 
 def _chat_client(model: str):

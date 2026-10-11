@@ -1,0 +1,6 @@
+{
+    "workspaceId": "f28cebee-afb3-4bc2-80f7-dd4a7f48f832",
+    "defaultEnvironment": "dev",
+    "gitBranchToEnvironmentMapping": null,
+    "domain": "http://localhost:8080/api"
+}

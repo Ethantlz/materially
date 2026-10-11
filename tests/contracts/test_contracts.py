@@ -1,8 +1,10 @@
 """Offline checks for contracts/, setup and the router (mongomock, no network)."""
+import json
+from pathlib import Path
+
 import pytest
 
 from app import router
-from app.db import get_db
 from app.router import TaskFailed, parse_json, run_task, system_prompt
 from contracts.samples import BAD_CONDITION, SAMPLES
 from contracts.schemas import VALIDATORS
@@ -16,12 +18,8 @@ BAD = '{"type_tag": "A1", "studs": {"size_in": 3.625, "gauge": 19, "spacing_in":
 
 
 @pytest.fixture
-def db(request, monkeypatch):
-    monkeypatch.setenv("MONGODB_URI", "mongomock://")
-    d = get_db(f"test_contracts_{request.node.name[:40]}")
-    setup(d)
-    yield d
-    d.client.drop_database(d.name)
+def db(mock_db):
+    return mock_db
 
 
 def test_one_valid_sample_per_collection():
@@ -55,6 +53,21 @@ def test_seed_rows_valid_and_sample_order_items_priced():
     items = {r["item"] for r in rows}
     assert len(items) == len(rows)
     assert {line["item"] for line in SAMPLES["orders"]["lines"]} <= items
+
+
+EXPECTED = sorted((Path(__file__).resolve().parents[2] / "fixtures" / "expected").glob("*.json"))
+
+
+@pytest.mark.parametrize("path", EXPECTED, ids=[p.name for p in EXPECTED])
+def test_expected_labels_match_contract(path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if path.stem.endswith("_sheets"):
+        from contracts.schemas import SHEET_KINDS
+
+        assert all(s["kind"] in SHEET_KINDS and s["page"] >= 1 for s in data["sheets"])
+    else:
+        for cond in data["conditions"]:
+            assert validate("conditions", cond, ai=True) == [], cond.get("type_tag")
 
 
 def test_setup_is_idempotent(db):
