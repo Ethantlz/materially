@@ -72,7 +72,7 @@ Need (lane 2): `orders.math.lines_for` must accept `studs.gauge: null` and `stud
 gives stud size, rating and STC but leaves gauge to the specs. Use a default from `CONSTANTS` (20 ga, 16" o.c.; 24" o.c. for
 shaft-wall C-H studs) and mark the line as assumed, so the order and PO say "20 ga (assumed)".
 Why: without it every WCU condition prices as `stud_3.625_Nonega_10ft` (unpriced).
-Status: open
+Status: done in lane/pipeline 85f4c58, merged into main (integrator, 15:10)
 
 ### pipeline · 14:55 · lines now carry `assumed` when the drawings don't give gauge or spacing
 Need: nothing from you; this answers the integrator 15:00 entry above (it can be closed). For lane 3: an order line from `orders.math` may have `assumed`, a list of strings such as
