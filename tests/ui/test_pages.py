@@ -182,6 +182,19 @@ def test_light_tokens_and_no_tab_nav(client):
     assert 'data-testid="nav-tabs"' not in page and 'data-testid="nav-home"' in page
 
 
+def test_css_uses_font_longhands_and_zero_specificity_button_defaults():
+    """`font: 500 13px/1 inherit` is invalid (`inherit` is not a family) and a bare `button` rule outranks
+    class rules, so the design system must spell fonts out and keep its button defaults at zero specificity."""
+    css = (ROOT / "ui" / "static" / "app.css").read_text(encoding="utf-8")
+    code = re.sub(r"/\*.*?\*/", "", css, flags=re.S)  # strip comments before looking at selectors
+    assert "13px/1 inherit" not in css and "1 inherit" not in css
+    assert not re.search(r"font:\s*\S[^;{}]*\s+inherit", css)  # no `font` shorthand with inherit as the family
+    assert ":where(button)" in css and ":where(button:hover)" in css
+    assert not re.search(r"^\s*button[\s,{:.>]", code, re.M)  # no bare button rules left
+    assert ".tbl th.num" in css
+    assert ".tbl tfoot td" in css and "border-top: 1px solid var(--line); }" in css
+
+
 def test_takeoff_js_renders_materials_and_scan():
     js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
     for tid in ("cond-materials", "material-row", "material-find", "material-product"):
