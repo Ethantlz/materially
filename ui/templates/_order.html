@@ -1,7 +1,8 @@
 <div data-testid="order-panel">
 <div class="pagehead">
-  <a class="back" href="/jobs/{{ o.job_id }}/orders">← Orders</a>
-  <h1>Order · {% if c %}<span class="swatch" style="background:{{ c.color }};width:14px;height:14px"></span><a class="tagchip big" href="/conditions/{{ c.id }}">{{ c.type_tag }}</a>{% endif %}
+  {# in the takeoff's popup this reopens the Orders popup (modals.js); anywhere else it is the plain link #}
+  <a class="back" href="/jobs/{{ o.job_id }}/orders" data-modal-open="/ui/jobs/{{ o.job_id }}/panel/orders{{ ('?alt=' ~ o.alternate_id) if o.alternate_id }}" data-modal-title="Material orders">← Orders</a>
+  <h1>Order · {% if c %}<span class="swatch" style="background:{{ c.color }};width:14px;height:14px"></span>{% if in_modal %}<span class="tagchip big">{{ c.type_tag }}</span>{% else %}<a class="tagchip big" href="/conditions/{{ c.id }}">{{ c.type_tag }}</a>{% endif %}{% endif %}
     {{ "%g" % o.lf }} LF{% if o.height_ft %} × {{ "%g" % o.height_ft }} ft{% endif %}</h1>
 </div>
 

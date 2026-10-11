@@ -16,6 +16,6 @@
   </tbody>
 </table>
 {% else %}
-<div class="card empty" data-testid="orders-empty">No orders yet. Measure walls in the <a href="/jobs/{{ jid }}/takeoff">takeoff</a>, then use Create order on a row of the quantities table.</div>
+<div class="card empty" data-testid="orders-empty">No orders yet. {% if in_modal %}Measure walls on the sheet{% else %}Measure walls in the <a href="/jobs/{{ jid }}/takeoff">takeoff</a>{% endif %}, then use Create order on a row of the quantities table.</div>
 {% endif %}
 </div>
