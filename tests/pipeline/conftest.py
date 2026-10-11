@@ -4,7 +4,7 @@ db        runs the test twice where it can: on mongomock (python fallbacks for $
           and on the lane's real database (the real $near, $merge and change stream). The live run is skipped
           outside `infisical run`.
 job       a fresh job_id per test; whatever the test wrote for it is deleted afterwards (live_job: live db only).
-client    FastAPI TestClient over the pipeline router alone.
+client    FastAPI TestClient over the pipeline and po routers alone.
 """
 import uuid
 
@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.db import now
 from contracts.samples import SAMPLES
 from pipeline.api import router
+from po.api import router as po_router
 
 JOB_COLLECTIONS = ("rooms", "ewos", "ewo_drafts", "conditions", "orders", "usage", "sheets", "measurements", "outbox")
 
@@ -56,6 +57,7 @@ def live_job(live_db):
 def client():
     app = FastAPI()
     app.include_router(router)
+    app.include_router(po_router)
     with TestClient(app) as c:
         yield c
 
