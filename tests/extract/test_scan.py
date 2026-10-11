@@ -1,3 +1,6 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 from bson import ObjectId
 from fastapi.testclient import TestClient
 
@@ -40,3 +43,53 @@ def test_rescan_keeps_condition_ids(mock_db, monkeypatch, tmp_path):
     assert sorted(map(str, first)) == sorted(map(str, second))
     assert mock_db.conditions.count_documents({"job_id": job}) == 3
     assert mock_db.conditions.find_one({"_id": ObjectId(cid)})["materials"][0]["role"] == "stud"
+
+
+def _job_sheet_blocks(tmp_path):
+    """A job id, a made-up partition sheet doc and the A-501 type-tag blocks."""
+    pdf = tmp_path / "set.pdf"
+    build(pdf)
+    page = next(p for p in read_pages(pdf) if any(s.text.strip() == "A1" for s in p.segs))
+    job = str(ObjectId())
+    return job, {"_id": ObjectId(), "job_id": job, "page": 6}, partition_blocks(page)
+
+
+def test_parallel_parses_of_the_same_tag_insert_one_condition(mock_db, monkeypatch, tmp_path):
+    """A scan double-click (or a scan during the upload-time parse) must not duplicate a type tag: the
+    find_one -> insert in parse_block is check-then-act, so it is serialised per (job_id, type_tag)."""
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    _fake_model(monkeypatch)
+    job, sheet, blocks = _job_sheet_blocks(tmp_path)
+    real_insert = analyze.insert_or_review
+
+    def slow_insert(db, collection, doc, source):
+        time.sleep(0.05)  # hold the check-then-act window open, so both threads get past find_one
+        return real_insert(db, collection, doc, source)
+
+    monkeypatch.setattr(analyze, "insert_or_review", slow_insert)
+    with ThreadPoolExecutor(2) as pool:
+        futures = [pool.submit(analyze.parse_blocks, mock_db, job, sheet, blocks) for _ in range(2)]
+        first, second = [f.result() for f in futures]
+    assert sorted(map(str, first)) == sorted(map(str, second))
+    assert mock_db.conditions.count_documents({"job_id": job}) == 3
+
+
+def test_rescan_keeps_product_id_and_person_edits(mock_db, monkeypatch, tmp_path):
+    """Task 6 writes materials[].product_id when it finds a product; a re-scan must not throw it away,
+    and a name or colour a person edited must survive the re-parse."""
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    _fake_model(monkeypatch)
+    job, sheet, blocks = _job_sheet_blocks(tmp_path)
+    analyze.parse_blocks(mock_db, job, sheet, blocks)
+    a1 = mock_db.conditions.find_one({"type_tag": "A1"})
+    assert a1["materials"][0]["key"] == "stud"
+    mock_db.conditions.update_one(
+        {"_id": a1["_id"]},
+        {"$set": {"name": "Party wall", "color": "#3b82f6", "materials.0.product_id": "prod_stud_1"}},
+    )
+    analyze.parse_blocks(mock_db, job, sheet, blocks)
+    doc = mock_db.conditions.find_one({"_id": a1["_id"]})
+    assert doc["name"] == "Party wall" and doc["color"] == "#3b82f6"
+    kept = {m["key"]: m.get("product_id") for m in doc["materials"]}
+    assert kept["stud"] == "prod_stud_1"
+    assert kept["board_0.625_type_x"] is None, "a row with no product found stays unfound"

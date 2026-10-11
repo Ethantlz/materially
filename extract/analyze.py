@@ -27,6 +27,24 @@ TASKS_AT_ONCE = 4  # run_task calls in flight: LiteLLM caps DeepSeek at 30 reque
 _jev_slots = threading.BoundedSemaphore(JEV_AT_ONCE)
 _task_slots = threading.BoundedSemaphore(TASKS_AT_ONCE)
 
+# One lock per (job_id, type_tag). parse_block is check-then-act (find_one, then insert or replace), and two
+# parses of the same tag can overlap: a scan double-click, or a scan while the upload-time parse still runs.
+_LOCKS: dict[tuple[str, str], threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(job_id: str, tag: str) -> threading.Lock:
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault((str(job_id), str(tag)), threading.Lock())
+
+
+def _keep_product_ids(old: list[dict], new: list[dict]) -> list[dict]:
+    """Task 6 writes materials[].product_id when it finds a product; a re-parse must not throw it away.
+    Rows match on `key`; a new row whose key is gone simply has no product yet."""
+    product = {m.get("key"): m["product_id"] for m in old if m.get("product_id")}
+    return [{**m, "product_id": product[m["key"]]} if product.get(m.get("key")) else m for m in new]
+
+
 QUESTION = "Which kind of drawing sheet is this?"
 # One line per kind, so Jev files sheets the way the title-keyword rules do (sections are elevations; site,
 # roof and cover sheets are other).
@@ -81,7 +99,8 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
     """One type tag's block -> a conditions doc, or a review_queue row (model failed, or MongoDB rejected it).
 
     A re-parse of the same (job_id, type_tag) updates the condition in place, so measurements that point at
-    it keep their condition; a name or colour a person edited is kept."""
+    it keep their condition; a name, colour or product a person or Task 6 added is kept. The find-one-then-write
+    is under a per-tag lock, so two parses of the same tag can't both insert it."""
     sheet_id = str(sheet["_id"])
     try:
         with _task_slots:
@@ -101,16 +120,20 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
         "materials": derive(out["result"], block.text),
         "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
     }
-    existing = db.conditions.find_one({"job_id": job_id, "type_tag": doc.get("type_tag")}, {"name": 1, "color": 1})
-    if existing is None:
-        return insert_or_review(db, "conditions", doc, "extract.partition")
-    keep = {k: existing[k] for k in ("name", "color") if existing.get(k)}  # what a person may have edited
-    try:
-        db.conditions.replace_one({"_id": existing["_id"]}, {**doc, **keep})
-    except WriteError as e:  # the validator rejected the re-parse: keep the old condition, park the new one
-        to_review(db, "extract.partition", {**doc, "job_id": job_id}, str(e))
-        return None
-    return existing["_id"]
+    with _lock_for(job_id, doc.get("type_tag")):
+        existing = db.conditions.find_one(
+            {"job_id": job_id, "type_tag": doc.get("type_tag")}, {"name": 1, "color": 1, "materials": 1}
+        )
+        if existing is None:
+            return insert_or_review(db, "conditions", doc, "extract.partition")
+        keep = {k: existing[k] for k in ("name", "color") if existing.get(k)}  # what a person may have edited
+        doc["materials"] = _keep_product_ids(existing.get("materials") or [], doc["materials"])
+        try:
+            db.conditions.replace_one({"_id": existing["_id"]}, {**doc, **keep})
+        except WriteError as e:  # the validator rejected the re-parse: keep the old condition, park the new one
+            to_review(db, "extract.partition", {**doc, "job_id": job_id}, str(e))
+            return None
+        return existing["_id"]
 
 
 def parse_blocks(db: Database, job_id: str, sheet: dict, blocks: list[Block]) -> list[ObjectId | None]:
