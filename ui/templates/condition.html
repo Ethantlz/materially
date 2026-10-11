@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ c.type_tag }} · {{ job.name }}{% endblock %}
 {% block body %}
-<div class="pagehead">
-  <a class="back" href="/jobs/{{ job.id }}/conditions">← Conditions</a>
-  <h1><span class="tagchip big" data-testid="condition-tag">{{ c.type_tag }}</span>
-    {{ c.studs.size_in | inches }} {{ c.studs.gauge }} ga @ {{ c.studs.spacing_in | inches }}
-    {% if c.fire_rating %}<span class="badge">{{ "%g" % c.fire_rating }} hr</span>{% endif %}</h1>
+<div class="pagehead row">
+  <div>
+    <a class="back" href="/jobs/{{ job.id }}/conditions">← Conditions</a>
+    <h1><span class="swatch" style="background:{{ v.color if v else '#888' }};width:14px;height:14px"></span><span class="tagchip big" data-testid="condition-tag">{{ c.type_tag }}</span>
+      {{ c.studs.size_in | inches }} {{ c.studs.gauge }} ga @ {{ c.studs.spacing_in | inches }}
+      {% if c.fire_rating %}<span class="badge">{{ "%g" % c.fire_rating }} hr</span>{% endif %}</h1>
+  </div>
+  <a class="btn" href="/jobs/{{ job.id }}/takeoff?cond={{ c.id }}">Measure this condition</a>
 </div>
 
 <div class="cols">
@@ -25,7 +28,8 @@
   </section>
 
   <section class="card" data-testid="condition-source">
-    <h2>Source sheet</h2>
+    <div class="row"><h2>Source sheet</h2>
+      {% if sheet and c.source and c.source.bbox %}<a class="btn ghost sm" href="/jobs/{{ job.id }}/takeoff?sheet={{ sheet.id }}&focus={{ c.id }}">Open on the sheet ↗</a>{% endif %}</div>
     {% if sheet %}
     <p><b>{{ sheet.sheet_no }}</b> {{ sheet.title }} <span class="muted">· page {{ sheet.page }}</span></p>
     {% if sheet.image_path %}
@@ -65,12 +69,14 @@
 
 <section class="card wide" data-testid="order-form-card">
   <h2>Order this wall</h2>
+  {% set lf = measured.lf if measured and measured.lf else none %}
+  <p class="muted small">{% if lf %}Linear feet start from the takeoff ({{ "%.1f" % lf }} LF measured). Change them here for a one-off order.{% else %}Nothing measured yet, so this starts from 100 LF. <a href="/jobs/{{ job.id }}/takeoff?cond={{ c.id }}">Measure it on the drawings</a> for the real number.{% endif %}</p>
   <form id="order-form" class="inline" data-testid="order-form">
-    <label>Linear feet <input type="number" name="lf" min="1" step="any" required value="100" data-testid="order-lf"></label>
+    <label>Linear feet <input type="number" name="lf" min="1" step="any" required value="{{ ('%.1f' % lf) if lf else 100 }}" data-testid="order-lf"></label>
     <label>Height (ft) <input type="number" name="height_ft" min="1" step="any" required value="{{ c.height_ft or 10 }}" data-testid="order-height"></label>
     <button type="submit" data-testid="order-build">Build order</button>
   </form>
-  {% if orders %}<p class="muted small">Earlier orders: {% for o in orders %}<a href="/orders/{{ o.id }}">{{ "%g" % o.lf }} LF · {{ o.total | money }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  {% if orders %}<p class="muted small" style="margin-top:12px">Earlier orders: {% for o in orders %}<a href="/orders/{{ o.id }}">{{ "%g" % o.lf }} LF · {{ o.total | money }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
 </section>
 {% endblock %}
 {% block scripts %}
@@ -81,12 +87,12 @@ document.getElementById("order-form").addEventListener("submit", async (e) => {
   const f = new FormData(e.target);
   const r = await call("POST", API.buildOrder(), { job_id: JOB_ID, condition_id: CID, lf: +f.get("lf"), height_ft: +f.get("height_ft") });
   const id = r.data && (r.data.order_id || r.data.id || r.data._id);
-  if (r.ok && id) location.href = "/orders/" + id; else toast(r.data?.detail || "Order failed", true);
+  if (r.ok && id) location.href = "/orders/" + id; else toast(errText(r, "Order failed"), true);
 });
 document.getElementById("procure").addEventListener("click", async (e) => {
   e.target.disabled = true; e.target.textContent = "Searching…";
   const r = await call("POST", API.procure(CID));
-  if (r.ok) location.reload(); else { toast(r.data?.detail || "Product search failed", true); e.target.disabled = false; e.target.textContent = "Find product data"; }
+  if (r.ok) location.reload(); else { toast(errText(r, "Product search failed"), true); e.target.disabled = false; e.target.textContent = "Find product data"; }
 });
 </script>
 {% endblock %}

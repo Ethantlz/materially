@@ -83,7 +83,9 @@ def test_pages_show_the_key_numbers(client):
     assert '3-5/8"' in cond and "Type X" in cond and "U419" in cond
     pm = client.get(f"/jobs/{JOB_ID}/pm").text
     assert "$625.55" in pm and "escalated" in pm
-    assert client.get(f"/ui/jobs/{JOB_ID}/cost").json() == {"calls": 1, "cost_usd": 0.00023}
+    cost = client.get(f"/ui/jobs/{JOB_ID}/cost").json()
+    assert cost["calls"] == 1 and cost["cost_usd"] == 0.00023
+    assert cost["by_task"] == [{"task": "parse_partition", "model": "deepseek-ai/DeepSeek-V4.1-Flash", "calls": 1, "cost_usd": 0.00023}]
     assert client.get(f"/ui/jobs/{JOB_ID}/drafts").json() == [str(DRAFT_ID)]
     assert client.get(f"/ui/drafts/{DRAFT_ID}/card").status_code == 200
 

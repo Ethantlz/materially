@@ -13,11 +13,17 @@
       {% for s in sheets %}<option value="{{ s.id }}" {{ "selected" if s.id == sheet.id }}>{{ s.sheet_no or ("Page %d" % s.page) }} · {{ s.title or "" }}</option>{% endfor %}
     </select>
   </label>
-  <div class="pinwrap" id="pinwrap" data-testid="ewo-sheet-image">
-    <img id="plan" src="{{ sheet.image_path }}" alt="{{ sheet.sheet_no }}">
-    <div class="pin" id="pin" hidden data-testid="ewo-pin"></div>
+  <div class="pinbar">
+    <span class="muted small">Zoom in, then tap to drop the pin</span>
+    <div class="zoom"><button type="button" class="ghost" id="zout" aria-label="Zoom out">−</button><button type="button" class="ghost" id="zin" aria-label="Zoom in">+</button></div>
   </div>
-  <p class="muted small" id="pinxy" data-testid="ewo-pin-xy">No pin yet. Tap the drawing.</p>
+  <div class="pinwrap" id="pinwrap" data-testid="ewo-sheet-image">
+    <div class="inner" id="inner">
+      <img id="plan" src="{{ sheet.image_path }}" alt="{{ sheet.sheet_no }}">
+      <div class="pin" id="pin" hidden data-testid="ewo-pin"></div>
+    </div>
+  </div>
+  <p class="muted small" id="pinxy" data-testid="ewo-pin-xy" style="margin-top:8px">No pin yet. Tap the drawing.</p>
   <label>Room
     <select id="room" data-testid="ewo-room">
       <option value="">Unknown / not in a room</option>
@@ -40,9 +46,21 @@
 const SHEET = {{ {"id": sheet.id, "size_pt": sheet.size_pt} | tojson }};
 const ROOMS = {{ rooms | tojson }};
 const img = document.getElementById("plan"), pin = document.getElementById("pin");
+const wrap = document.getElementById("pinwrap"), inner = document.getElementById("inner");
 const roomSel = document.getElementById("room");
-let pt = null;
+let pt = null, zoom = 1;
 document.getElementById("sheet").addEventListener("change", (e) => (location.search = "?sheet=" + e.target.value));
+
+function setZoom(z) {
+  const cx = (wrap.scrollLeft + wrap.clientWidth / 2) / inner.clientWidth, cy = (wrap.scrollTop + wrap.clientHeight / 2) / inner.clientHeight;
+  zoom = Math.min(10, Math.max(1, z));
+  inner.style.width = zoom * 100 + "%";
+  wrap.scrollLeft = cx * inner.clientWidth - wrap.clientWidth / 2;
+  wrap.scrollTop = cy * inner.clientHeight - wrap.clientHeight / 2;
+}
+document.getElementById("zin").onclick = () => setZoom(zoom * 1.6);
+document.getElementById("zout").onclick = () => setZoom(zoom / 1.6);
+
 img.addEventListener("click", (e) => {
   const r = img.getBoundingClientRect();
   const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
@@ -65,9 +83,10 @@ document.getElementById("ewo-form").addEventListener("submit", async (e) => {
   const body = { job_id: JOB_ID, sheet: SHEET.id, x: pt[0], y: pt[1], description: document.getElementById("desc").value.trim(), room_id: roomSel.value || null };
   const r = await call("POST", API.ewos(), body);
   btn.disabled = false; btn.textContent = "Send to PM";
-  if (!r.ok) return toast(r.data?.detail || "Couldn't send the EWO", true);
+  if (!r.ok) return toast(errText(r, "Couldn't send the EWO"), true);
   document.getElementById("done").hidden = false;
   document.getElementById("desc").value = ""; pin.hidden = true; pt = null;
+  document.getElementById("pinxy").textContent = "No pin yet. Tap the drawing.";
 });
 </script>
 {% endif %}
