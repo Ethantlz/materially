@@ -78,3 +78,39 @@ def test_schedule_rows_keep_their_own_text():
     assert [b.tag for b in blocks] == ["A1", "A2", "A3"]
     assert [b.text.count(" GA @") for b in blocks] == [1, 1, 1]
     assert "20 GA" in blocks[0].text and "25 GA" in blocks[1].text and "18 GA" in blocks[2].text
+
+
+def _schedule_sheet() -> PageText:
+    """Two wall families, each a section with callouts over a schedule whose columns are the wall types
+    (the WCU A003 layout), plus a tag legend in the notes column."""
+    segs = [
+        seg("SA", 200, 60, 23),
+        seg("5/8\" TYPE 'X' GYP. BD.", 500, 250),
+        seg('METAL STUD FRAMING @ 16" OC', 500, 280),
+        seg("25 GA. RESILIENT CHANNEL", 220, 300),
+        seg("SA4", 420, 470), seg("SA6", 492, 470), seg("-", 564, 470), seg("-", 636, 470),
+        seg("STUD SIZE", 200, 488), seg('3 5/8"', 420, 488), seg('6"', 495, 488),
+        seg("ACTUAL DIMENSION 'X'", 200, 508), seg('5 3/8"', 420, 507), seg('7 3/4"', 490, 507),
+        seg("FIRE RATING", 200, 530), seg("1 HR", 422, 524), seg("UL# U419", 414, 535), seg("-", 494, 524),
+        seg("SB", 760, 60, 23),
+        seg("5/8\" TYPE 'X' GYP. BD. (SB)", 1100, 250),
+        seg('METAL STUD FRAMING @ 24" OC', 1100, 280),
+        seg("SB2", 980, 470), seg("-", 1052, 470),
+        seg("STUD SIZE", 760, 488), seg("SEE UL DET.", 965, 488),
+        seg("FIRE RATING", 760, 530), seg("2 HR", 980, 524),
+        seg("GENERAL NOTES", 1400, 60, 23),
+        seg("SA4", 1500, 400), seg("S - STEEL STUD", 1400, 410),
+    ]
+    return PageText(3024, 2160, segs, tb_corner=(2700, 0))
+
+
+def test_schedule_columns_become_blocks():
+    blocks = {b.tag: b for b in partition_blocks(_schedule_sheet())}
+    assert sorted(blocks) == ["SA4", "SA6", "SB2"], "one block per schedule column; the legend SA4 is not one"
+    sa4, sa6, sb2 = blocks["SA4"].text, blocks["SA6"].text, blocks["SB2"].text
+    assert sa4.splitlines()[0] == "SA4"
+    assert 'STUD SIZE: 3 5/8"' in sa4 and "ACTUAL DIMENSION 'X': 5 3/8\"" in sa4 and "FIRE RATING: 1 HR UL# U419" in sa4
+    assert '7 3/4"' not in sa4 and 'STUD SIZE: 6"' in sa6 and "ACTUAL DIMENSION 'X': 7 3/4\"" in sa6
+    assert all("RESILIENT CHANNEL" in t and '16" OC' in t and "(SB)" not in t for t in (sa4, sa6))
+    assert "STUD SIZE: SEE UL DET." in sb2 and "FIRE RATING: 2 HR" in sb2 and '24" OC' in sb2 and "RESILIENT" not in sb2
+    assert not any("GENERAL NOTES" in t or "STEEL STUD" in t for t in (sa4, sa6, sb2))

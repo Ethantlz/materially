@@ -91,10 +91,32 @@ Why: the takeoff canvas colours measurements by condition and the "+ New conditi
 Workaround in place: `static/api.js` tries the real route and, only when it answers "route missing" (FastAPI's 404 `{"detail":"Not Found"}` or a 405), falls back to `/ui/standin/*` in `ui/standins.py` (calibrate, condition create, and a copy of the measurement routes). Both write the same collections as the real routes, so nothing diverges. The toolbar shows an amber "stand-in API" chip while any fallback is in use. Delete `ui/standins.py`, its `include_router` line in `ui/api.py`, and the second URL of each route in `static/api.js` once the lanes have merged.
 Status: open
 
+<<<<<<< HEAD
 ### ui · 15:10 · observations from running the demo set (WCU, 28 sheets) and the live paths
 - `POST /api/jobs` with `fixtures/demo.pdf` on lane3 yields one condition (SD4, no `name`/`color`); the others were not parsed or went to review. That is lane 1's output, not a UI issue, but the takeoff beat on A100 needs conditions to click, so the form is the fallback.
 - Pipeline paths verified end to end from the browser on lane3: measure on A-101 (60 LF for 540 pt at 9 pt/ft), quantities, `POST /api/jobs/{id}/conditions/{cid}/order`, padded board line trips the guard, `POST /api/orders/{id}/send`, `GET /api/orders/{id}/po` in the preview panel, SSE `/events/pm` (a draft inserted in MongoDB shows up in 0.2 s).
 - An EWO's draft took about 70 s from the foreman's tap to the PM queue (Jev route, then drafting; one escalation to Sonnet). Fine for the pipeline, long for a live video: record the PM beat with a draft already warm or shorten the model path.
 - `LANE_NOTES.md` on main still had a stray conflict marker at the top of the entries (fixed by the integrator, 15:15).
 Status: info
+
+### extract · 15:20 · WCU A003 schedule columns parse end to end (no app/ or contracts/ change needed)
+- `extract/partitions.py` has a schedule layout: wall-family labels (SA, SB, ...) that prefix the tags anchor the
+  cell grouping, and each tag heading a schedule column is one block: the family callouts, then
+  `SCHEDULE COLUMN <tag>:` with one `<row label>: <values>` line per row. Tags outside every family (the WALL TAG
+  LEGEND's SA4) are ignored. Sheets without family labels use the tag + nearby text grouping as before.
+- Live on lane1: SA4, SC2, SC4, SD4, SH2, SH4, SH6 inserted (DeepSeek, none escalated); SB2 in review_queue with
+  `studs.size_in: expected number, got NoneType None; sides: None not one of [1, 2]`. That reason comes from
+  run_task's contract check (the same `$jsonSchema` rules, after the Sonnet retry), so SB2 never reaches a MongoDB
+  insert. For the beat to show MongoDB itself rejecting, the router would have to hand the failed result to the
+  caller instead of raising TaskFailed.
+- `tests/extract/test_demo.py` runs when `fixtures/demo.pdf` exists (live part needs LITELLM_API_KEY).
+- Removed a stray conflict-marker line left in this file by the 14:45 merge.
 Status: info
+
+### integrator · 15:25 · TaskFailed now carries the failed answer, so MongoDB can do the rejecting
+Need (lane 1, and lane 2 for ewo_drafts): on `TaskFailed`, when `e.result` is a dict, write
+`{**e.result, job_id, source, routing: {model: e.model, escalated: True}}` with `insert_or_review(...)` instead of only
+`to_review(...)`. MongoDB's `$jsonSchema` then rejects it (code 121) and review_queue gets MongoDB's own errInfo reason;
+fall back to `to_review(..., e.reason)` when `e.result` is None (the JSON never parsed).
+Why: the video beat and the MongoDB judge want the database itself rejecting SB2 ("SEE UL DET."), not the Python pre-check.
+Status: open
