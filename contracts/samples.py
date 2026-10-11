@@ -136,8 +136,11 @@ SAMPLES: dict[str, dict] = {
         "title": '5/8" Type X Gypsum Board - Product Data',
         "attrs": {"thickness_in": 0.625, "board_type": "type_x", "ul": ["U419"], "fire_rated": True},
         "spec_check": {"thickness_in": 0.03, "board_type": 0.05},
+        "domains": ["sample-supply.example.com"],
+        "checked": True,
         "fetched_at": AT,
     },
+    "product_sources": {"url": "https://sample-supply.example.com", "domain": "sample-supply.example.com", "name": "Sample Supply Co", "created_at": AT},
     "price_book": {"item": "board_0.625_type_x_4x10", "unit": "ea", "unit_cost": 21.6, "supplier": "Sample Supply Co"},
     "model_policy": {
         "task": "parse_partition",

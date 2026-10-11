@@ -181,3 +181,16 @@ def test_task_failed_carries_latest_invalid_answer(db, monkeypatch):
     with pytest.raises(TaskFailed) as e:
         run_task("parse_partition", "A1 ...", "conditions", db=db)
     assert e.value.result == parse_json(BAD) and e.value.model == "claude-sonnet-5-5"
+
+
+def test_product_sources_and_product_data_contract():
+    from contracts.schemas import INDEXES
+
+    assert validate("product_sources", SAMPLES["product_sources"]) == []
+    assert any("domain" in e for e in validate("product_sources", {k: v for k, v in SAMPLES["product_sources"].items() if k != "domain"}))
+    assert validate("product_sources", {**SAMPLES["product_sources"], "name": None}) == []
+    assert ([("domain", 1)], {"unique": True}) in INDEXES["product_sources"]
+    assert validate("product_data", SAMPLES["product_data"]) == []
+    assert validate("product_data", {"query_hash": "h", "domains": [], "checked": False, "spec_check": {}}) == []
+    assert any("checked" in e for e in validate("product_data", {"query_hash": "h", "checked": "no"}))
+    assert any("domains" in e for e in validate("product_data", {"query_hash": "h", "domains": "a.com"}))
