@@ -292,6 +292,16 @@ VALIDATORS: dict[str, dict] = {
             "retry_model": _STR_OR_NULL,
             "enabled": {"bsonType": "bool"},
             "prompt": _STR_OR_NULL,  # overrides app/prompts.py for this task
+            # Call options for `model` (not the retry model), read live by the router. Example: EWO drafting turns
+            # DeepSeek's reasoning off: {"extra_body": {"chat_template_kwargs": {"thinking": false}}, "timeout_s": 30}
+            "params": {
+                "bsonType": ["object", "null"],
+                "properties": {
+                    "extra_body": {"bsonType": "object"},
+                    "timeout_s": {"bsonType": "number", "minimum": 1, "maximum": 600},
+                    "max_tokens": {"bsonType": "number", "minimum": 16, "maximum": 32000},
+                },
+            },
         },
     },
     "usage": {

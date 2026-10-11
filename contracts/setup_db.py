@@ -53,6 +53,10 @@ def seed(db: Database) -> None:
                 coll.update_one(flt, upd, upsert=True)
         else:
             coll.bulk_write([UpdateOne(flt, upd, upsert=True) for flt, upd in ops])
+    # Rows seeded before `params` existed get it once; a params value someone set in Compass is left alone.
+    for p in MODEL_POLICY:
+        if "params" in p:
+            db.model_policy.update_one({"task": p["task"], "params": {"$exists": False}}, {"$set": {"params": p["params"]}})
 
 
 def self_check(db: Database) -> None:

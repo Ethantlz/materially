@@ -11,6 +11,11 @@ callouts over a schedule table whose columns are the wall types (SA4, SC2, SC4) 
 ACTUAL DIMENSION 'X', FIRE RATING, ... . The same column grouping runs with the family labels as anchors, and
 each tag that heads a schedule column becomes one block: the family's callouts plus that column's values,
 row by row. Tags outside every family (a tag legend) are ignored there.
+
+List layout (Ottawa A001 ASSEMBLY SCHEDULE): tags down one column, each with a heading starting beside it and
+indented lines under that. A line that starts with a tag ("P5 INTERIOR ...") is split into tag and text when it
+lines up with a tag that stands alone. Each block grows from its tag through text beside or stacked under text
+already in it, up to the next tag, so unrelated notes further right in the same rows stay out.
 """
 import re
 import statistics
@@ -22,6 +27,7 @@ from extract.sheetinfo import PageText
 
 TAG = re.compile(r"(?:(?:WALL|PARTITION)\s+)?(?:TYPE\s+)?(?P<tag>[A-Z]{1,2}-?\d{1,2}[A-Z]?|\d{1,2}[A-Z])")
 NOT_TAG = re.compile(r"R-\d{2}")  # insulation R-values (R-19)
+LEADING_TAG = re.compile(r"(?P<tag>[A-Z]{1,2}-?\d{1,2}[A-Z]?|\d{1,2}[A-Z])\s+(?P<rest>\S.*)")
 FAMILY = re.compile(r"[A-Z]{1,3}")
 ROW_LABEL = re.compile(
     r"(?:STUD\s+(?:SIZE|GAUGE|SPACING)|ACTUAL\s+DIMENSION|DIMENSION|FIRE\s+RATING|(?:ACOUSTICAL|SOUND)\s+RATING|"
@@ -64,6 +70,7 @@ def find_tags(p: PageText) -> list[Seg]:
 
 
 def partition_blocks(p: PageText) -> list[Block]:
+    p = _split_leading_tags(p)
     tags = find_tags(p)
     if not tags:
         return []
@@ -71,9 +78,32 @@ def partition_blocks(p: PageText) -> list[Block]:
     return (families and _schedule_blocks(p, tags, families)) or _tag_blocks(p, tags)
 
 
+def _split_leading_tags(p: PageText) -> PageText:
+    """'P5 INTERIOR SECURE ...' -> a 'P5' segment and the rest, when its left edge lines up (3 pt) with a tag
+    that stands alone, so a drawing list ("E1 - ELECTRICAL LEGENDS") stays text."""
+    text = [s for s in p.segs if not p.in_title_block(s)]
+    leading = [(s, m) for s in text if (m := LEADING_TAG.fullmatch(s.text.strip())) and not NOT_TAG.fullmatch(m["tag"])]
+    if not leading:
+        return p
+    lefts = [s.x0 for s in text if tag_of(s)]
+    pieces: dict[int, list[Seg]] = {}
+    for s, m in leading:
+        if not any(abs(x - s.x0) <= 3 for x in lefts):
+            continue
+        per_char = (s.x1 - s.x0) / len(s.text.strip())
+        cut = s.x0 + per_char * len(m["tag"])
+        pieces[id(s)] = [Seg(m["tag"], s.x0, s.top, cut, s.bottom, s.size),
+                         Seg(m["rest"], cut + per_char, s.top, s.x1, s.bottom, s.size)]
+    if not pieces:
+        return p
+    segs = [piece for s in p.segs for piece in pieces.get(id(s), [s])]
+    return PageText(p.width, p.height, segs, p.bookmark, p.label, p.tb_corner)
+
+
 def _tag_blocks(p: PageText, tags: list[Seg]) -> list[Block]:
     tag_ids = {id(t) for t in tags}
-    owned = _group(p, tags, [s for s in p.segs if id(s) not in tag_ids and not p.in_title_block(s)])
+    text = [s for s in p.segs if id(s) not in tag_ids and not p.in_title_block(s)]
+    owned = _grow(tags, text) if _is_list(tags, text) else _group(p, tags, text)
     best: dict[str, Block] = {}
     for t in tags:
         b = Block(tag_of(t), t, owned[id(t)])
@@ -134,6 +164,43 @@ def _schedule_blocks(p: PageText, tags: list[Seg], families: list[Seg]) -> list[
             body = "\n".join([f"WALL FAMILY {name} CALLOUTS:", _join(callouts), f"SCHEDULE COLUMN {tag}:", *cells])
             blocks.append(Block(tag, t, values, body=body))
     return sorted(blocks, key=lambda b: (b.tag_seg.top, b.tag_seg.x0))
+
+
+def _beside(a: Seg, b: Seg) -> bool:
+    """b starts just right of a on the same line."""
+    return min(a.bottom, b.bottom) - max(a.top, b.top) > 0 and 0 <= b.x0 - a.x1 <= 3 * max(a.size, b.size)
+
+
+def _under(a: Seg, b: Seg) -> bool:
+    """b is the next line under a: a small gap, overlapping it or starting near its left edge."""
+    size = max(a.size, b.size)
+    lined_up = min(a.x1, b.x1) - max(a.x0, b.x0) > 0 or abs(b.x0 - a.x0) <= 3 * size
+    return 0 <= b.top - a.bottom <= size and lined_up
+
+
+def _is_list(tags: list[Seg], text: list[Seg]) -> bool:
+    """One column of tags, most of them with their text starting right beside them."""
+    if len(tags) < 2 or len(_columns(tags, 0.5 * max(t.size for t in tags))) != 1:
+        return False
+    return sum(any(_beside(t, s) for s in text) for t in tags) > len(tags) / 2
+
+
+def _grow(tags: list[Seg], text: list[Seg]) -> dict[int, list[Seg]]:
+    """id(tag) -> the text reachable from it through _beside / _under steps, between it and the next tag."""
+    order = sorted(tags, key=lambda t: t.top)
+    owned: dict[int, list[Seg]] = {}
+    for i, t in enumerate(order):
+        hi = order[i + 1].top - order[i + 1].size if i + 1 < len(order) else float("inf")
+        band = [s for s in text if t.top - t.size <= s.top < hi]
+        block, grew = [t], True
+        while grew:
+            grew = False
+            for s in band:
+                if s not in block and any(_beside(b, s) or _under(b, s) for b in block):
+                    block.append(s)
+                    grew = True
+        owned[id(t)] = block[1:]
+    return owned
 
 
 def _is_dash(s: Seg) -> bool:

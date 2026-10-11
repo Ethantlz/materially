@@ -114,3 +114,42 @@ def test_schedule_columns_become_blocks():
     assert all("RESILIENT CHANNEL" in t and '16" OC' in t and "(SB)" not in t for t in (sa4, sa6))
     assert "STUD SIZE: SEE UL DET." in sb2 and "FIRE RATING: 2 HR" in sb2 and '24" OC' in sb2 and "RESILIENT" not in sb2
     assert not any("GENERAL NOTES" in t or "STEEL STUD" in t for t in (sa4, sa6, sb2))
+
+
+def _list_sheet() -> PageText:
+    """An assembly schedule written as a list (the Ottawa A001 layout): tags down one column, some on their own,
+    some starting their line, each with a heading beside the tag and indented lines under it; a site note sits
+    to the right in the same rows."""
+    s = 11.1
+    segs = [
+        seg("P1 PARTITION TYPE NOT USED", 1098, 397, 10.7),
+        seg("INTERIOR PARTITION WALL CONSTRUCTION", 1131, 443.5, s), seg("P2", 1098, 449.6, 10.7),
+        seg("FLOOR TO U/S OF SLAB", 1131, 457.9, s),
+        seg("-16 mm TYPE X GYPSUM BOARD BOTH SIDES", 1158, 472.2, s),
+        seg("-92 mm STEEL STUDS @ MAX. 400mm O.C.", 1158, 486.5, s),
+        seg("INTERIOR PARTITION WALL CONSTRUCTION - MIN. STC 46", 1131, 537.5, s), seg("P3", 1098, 542.4, 10.7),
+        seg("-16 mm TYPE X GYPSUM BOARD BOTH SIDES", 1158, 552, s),
+        seg("-92 mm STEEL STUDS @ 600mm O.C. FILLED WITH", 1158, 566.2, s),
+        seg("CREATE FENCED STAGING AREA IN", 1624, 573.8, 9.3), seg("EXISTING PARKING AREA", 1624, 585.7, 9.3),
+        seg("-MINERAL FIBER INSULATION", 1158, 580.5, s),
+        seg("P5 INTERIOR SECURE DEMISING WALL - 1HR", 1098, 861, 10.7),
+        seg("ULC W407:", 1132, 874, 12.3),
+        *[seg(f"-16mm TYPE X GYPSUM BOARD LINE {i}", 1166, 888.7 + 13.4 * i, 10.2) for i in range(10)],
+        seg("N", 1645, 1162, 9.3),
+    ]
+    return PageText(2835, 2004, segs, tb_corner=(2282, 0))
+
+
+def test_list_layout_blocks():
+    blocks = {b.tag: b.text for b in partition_blocks(_list_sheet())}
+    assert sorted(blocks) == ["P2", "P3", "P5"], "P1 says 'not used': no stud or board wording"
+    assert blocks["P2"].splitlines()[1] == "INTERIOR PARTITION WALL CONSTRUCTION", "the heading beside the tag starts the block"
+    assert "400mm" in blocks["P2"] and "600mm" not in blocks["P2"]
+    assert "MINERAL FIBER" in blocks["P3"] and "STAGING" not in blocks["P3"] and "PARKING" not in blocks["P3"]
+    assert blocks["P5"].splitlines()[1] == "INTERIOR SECURE DEMISING WALL - 1HR", "a tag that starts its line is split off"
+    assert "LINE 9" in blocks["P5"] and "\nN" not in blocks["P5"]
+
+
+def test_a_line_starting_with_a_tag_alone_is_not_a_tag():
+    p = PageText(2592, 1728, [seg("A1 MOUNTED BOARD BY OWNER", 400, 400), seg('3 5/8" STUDS', 400, 412)], tb_corner=(2300, 0))
+    assert find_tags(p) == [] and partition_blocks(p) == []

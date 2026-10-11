@@ -1,4 +1,5 @@
 """After pass 1: Jev sorts each sheet, then partition sheets become conditions and floor plans become rooms.
+A sheet whose own title names partitions or assemblies is parsed whatever kind Jev gives it.
 
 This runs once the names are written (so the UI shows them at once) and updates the sheet docs in place.
 Sorting: jev.choice over SHEET_KINDS. Agreed -> kind and routing; disagreed or Jev down -> keep the
@@ -14,12 +15,13 @@ from pymongo.database import Database
 from pymongo.errors import WriteError
 
 from app import jev, router
+from extract import conditions
 from app.db import insert_or_review, oid, to_review
 from contracts.schemas import SHEET_KINDS
 from extract.materials import derive
 from extract.partitions import Block, partition_blocks
 from extract.rooms import find_rooms
-from extract.sheetinfo import PageText
+from extract.sheetinfo import PageText, guess_kind
 from extract.store import insert_all
 
 JEV_AT_ONCE = 8  # jev.choice calls in flight
@@ -49,8 +51,8 @@ QUESTION = "Which kind of drawing sheet is this?"
 # One line per kind, so Jev files sheets the way the title-keyword rules do (sections are elevations; site,
 # roof and cover sheets are other).
 KIND_OPTIONS = {
-    "partition_types": "partition types, wall types or wall assemblies",
-    "floor_plan": "floor plans and enlarged floor plans (not ceiling, roof or site plans)",
+    "partition_types": "partition types, wall types, wall assemblies or an assembly schedule, also on a cover sheet",
+    "floor_plan": "floor plans: new work, demolition, finish, furniture and enlarged plans (not ceiling, roof or site)",
     "reflected_ceiling": "reflected ceiling plans (RCP)",
     "elevations": "exterior or interior elevations, building or wall sections",
     "details": "construction details",
@@ -102,10 +104,16 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
     it keep their condition; a name, colour or product a person or Task 6 added is kept. The find-one-then-write
     is under a per-tag lock, so two parses of the same tag can't both insert it."""
     sheet_id = str(sheet["_id"])
+    source = {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox}
     try:
         with _task_slots:
             out = router.run_task("parse_partition", block.text, "conditions", job_id=job_id, db=db)
     except router.TaskFailed as e:
+        if isinstance(e.result, dict):  # an answer that failed the contract: MongoDB's validator rejects it into review
+            result, changed = conditions.nominal(e.result)
+            routing = {"task": "parse_partition", "model": e.model, "escalated": True, **({"normalized": changed} if changed else {})}
+            return insert_or_review(db, "conditions", {**result, "job_id": job_id, "source": source, "routing": routing},
+                                    "extract.partition")
         to_review(
             db,
             "extract.partition",
@@ -113,19 +121,21 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
             e.reason,
         )
         return None
+    result, changed = conditions.nominal(out["result"])
+    routing = {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]}
     doc = {
-        **out["result"],
+        **result,
         "job_id": job_id,
-        "source": {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox},
-        "materials": derive(out["result"], block.text),
-        "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
+        "source": source,
+        "materials": derive(result, block.text),
+        "routing": {**routing, **({"normalized": changed} if changed else {})},
     }
     with _lock_for(job_id, doc.get("type_tag")):
         existing = db.conditions.find_one(
             {"job_id": job_id, "type_tag": doc.get("type_tag")}, {"name": 1, "color": 1, "materials": 1}
         )
         if existing is None:
-            return insert_or_review(db, "conditions", doc, "extract.partition")
+            return conditions.insert(db, doc, "extract.partition")
         keep = {k: existing[k] for k in ("name", "color") if existing.get(k)}  # what a person may have edited
         doc["materials"] = _keep_product_ids(existing.get("materials") or [], doc["materials"])
         try:
@@ -162,7 +172,8 @@ def analyze(db: Database, job_id: str, items: list[tuple[dict, PageText]]) -> No
             kind = done.result()
             if kind == "floor_plan":
                 add_rooms(db, job_id, sheet, page)
-            elif kind == "partition_types":
+            elif kind == "partition_types" or guess_kind(sheet.get("title")) == "partition_types":
+                # a cover page carrying the ASSEMBLY SCHEDULE is "other" to Jev; its title still says partition types
                 parsing += [parsers.submit(parse_block, db, job_id, sheet, b) for b in partition_blocks(page)]
         for f in parsing:
             f.result()

@@ -104,6 +104,7 @@ def test_jev_error_keeps_keyword_kind_and_queues_review(mock_db, job, named, mon
 def test_at_most_8_jev_calls_at_once(mock_db, job, named, monkeypatch):
     fake = Peak(lambda *a, **kw: agreed("other"))
     monkeypatch.setattr(jev, "choice", fake)
+    monkeypatch.setattr(router, "run_task", parsed)
     analyze.analyze(mock_db, job, list(named.values()) * 3)
     assert fake.peak == 8
 
@@ -130,6 +131,16 @@ def test_partition_sheet_becomes_conditions_and_plans_become_rooms(mock_db, job,
     plans = [str(named[no][0]["_id"]) for no in ("A-101", "A-102")]
     assert {k: sorted(v) for k, v in by_sheet.items()} == {sid: ["101", "102", "103"] for sid in plans}
     assert mock_db.jobs.find_one({"_id": oid(job)})["pages_sorted"] == 7
+
+
+def test_a_sheet_titled_partition_types_is_parsed_whatever_jev_says(mock_db, job, named, monkeypatch):
+    """Ottawa A001 is a cover page that carries the ASSEMBLY SCHEDULE: Jev calls it other, its title says otherwise."""
+    monkeypatch.setattr(jev, "choice", lambda *a, **kw: agreed("other"))
+    monkeypatch.setattr(router, "run_task", parsed)
+    analyze.analyze(mock_db, job, [named["A-501"], named["A-101"]])
+    assert mock_db.sheets.find_one({"_id": named["A-501"][0]["_id"]})["kind"] == "other"
+    assert sorted(c["type_tag"] for c in mock_db.conditions.find({"job_id": job})) == ["A1", "A2", "B1"]
+    assert mock_db.rooms.count_documents({"job_id": job}) == 0, "rooms follow the kind"
 
 
 def test_failed_parse_goes_to_review(mock_db, job, named, monkeypatch):
@@ -183,5 +194,27 @@ def test_mongodb_rejection_lands_in_review_queue(live_db, synthetic_pdf, monkeyp
         reviews = list(db.review_queue.find({"source": "extract.partition", "doc.job_id": job_id}))
         assert len(reviews) == 3 and all("validation" in r["reason"].lower() for r in reviews)
         assert reviews[0]["collection"] == "conditions"
+    finally:
+        forget_job(db, job_id)
+
+
+def test_failed_parse_with_an_answer_is_rejected_by_mongodb(live_db, synthetic_pdf, monkeypatch):
+    """TaskFailed carrying the model's last (invalid) answer: MongoDB itself rejects it into review_queue."""
+    db = live_db
+    job_id = str(db.jobs.insert_one({"name": "taskfailed test", "created_at": now(), "status": "processing"}).inserted_id)
+    try:
+        sheet, page = next((s, p) for s, p in name_sheets(db, job_id, [synthetic_pdf]) if s["sheet_no"] == "A-501")
+        bad = {"type_tag": "A1", "studs": {"size_in": None, "gauge": None, "spacing_in": None}, "layers_each_side": LAYERS}
+
+        def fails(task, payload, *a, **kw):
+            raise router.TaskFailed(task, "studs.size_in: expected number", "{}", result=bad, model="claude-sonnet-5-5")
+
+        monkeypatch.setattr(router, "run_task", fails)
+        analyze.parse_sheet(db, job_id, sheet, page)
+        assert db.conditions.count_documents({"job_id": job_id}) == 0
+        reviews = list(db.review_queue.find({"source": "extract.partition", "doc.job_id": job_id}))
+        assert len(reviews) == 3 and all("Document failed validation" in r["reason"] for r in reviews)
+        assert reviews[0]["doc"]["routing"] == {"task": "parse_partition", "model": "claude-sonnet-5-5", "escalated": True}
+        assert reviews[0]["doc"]["source"]["sheet"] == str(sheet["_id"])
     finally:
         forget_job(db, job_id)

@@ -21,9 +21,20 @@ DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash"
 SONNET = "claude-sonnet-5-5"
 SUPPLIER = "Sample Supply Co"
 
+# EWO drafts are on camera: DeepSeek's reasoning made them ~90 s (and ran out of tokens); off, they take ~2 s.
+# Luminal's servers don't all honour the same switch, so send all three. A draft is ~350 tokens: the 900 cap
+# and 30 s timeout make a server that reasons anyway fail fast into the Sonnet retry. Partition parsing keeps reasoning.
+FAST = {
+    "extra_body": {"chat_template_kwargs": {"thinking": False, "enable_thinking": False}, "reasoning_effort": "none"},
+    "timeout_s": 30,
+    "max_tokens": 900,
+}
+EWO_TASKS = ("price_extra", "base_scope_check", "backcharge")
+
 MODEL_POLICY = [
-    {"task": task, "tier": "quick", "model": DEEPSEEK, "retry_model": SONNET, "enabled": True}
-    for task in ("parse_partition", "extract_product_attrs", "price_extra", "base_scope_check", "backcharge")
+    {"task": task, "tier": "quick", "model": DEEPSEEK, "retry_model": SONNET, "enabled": True,
+     **({"params": FAST} if task in EWO_TASKS else {})}
+    for task in ("parse_partition", "extract_product_attrs", *EWO_TASKS)
 ]
 
 STUD_SIZES = {1.625: 0.42, 2.5: 0.55, 3.625: 0.70, 4: 0.76, 6: 0.98}  # $/ft at 25 ga
