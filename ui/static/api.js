@@ -119,14 +119,15 @@ window.costBadge = (job) => {
     createCondition: (job, body) =>                                                                       // extract
       route("createCondition", "POST", [`/api/jobs/${job}/conditions`, `/ui/standin/jobs/${job}/conditions`], body),
 
-    async measurements(sheet) {                                                                           // pipeline
-      const r = await route("measurements", "GET", [`/api/sheets/${sheet}/measurements`, `/ui/standin/sheets/${sheet}/measurements`]);
+    async measurements(sheet, alt) {                                                                      // pipeline
+      const q = alt ? `?alternate_id=${encodeURIComponent(alt)}` : "";
+      const r = await route("measurements", "GET", [`/api/sheets/${sheet}/measurements${q}`, `/ui/standin/sheets/${sheet}/measurements`]);
       return { ...r, items: r.ok ? list(r.data, "measurements", "items").map((m) => ({ ...m, id: idOf(m) })) : [] };
     },
     addMeasurement: (m) => route("addMeasurement", "POST", ["/api/measurements", "/ui/standin/measurements"], m),
     deleteMeasurement: (id) => route("deleteMeasurement", "DELETE", [`/api/measurements/${id}`, `/ui/standin/measurements/${id}`]),
-    undo: (sheet) =>
-      route("undo", "POST", [`/api/sheets/${sheet}/measurements/undo`, `/ui/standin/sheets/${sheet}/measurements/undo`]),
+    undo: (sheet, alt) =>
+      route("undo", "POST", [`/api/sheets/${sheet}/measurements/undo${alt ? `?alternate_id=${encodeURIComponent(alt)}` : ""}`, `/ui/standin/sheets/${sheet}/measurements/undo`]),
 
     // One entry per condition: {cid, lf, sf, ea, n, ...}. The rows may come one per (condition, unit) or already merged.
     async quantities(job) {                                                                               // pipeline
