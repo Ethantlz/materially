@@ -3,32 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light">
   <title>{% block title %}materially{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
   <header class="top">
-    <a class="brand" href="/" data-testid="nav-home"><i class="logo"></i>materially</a>
+    <a class="brand" href="/" data-testid="nav-home"><span class="mark">m</span>materially</a>
+    {% if job %}<span class="faint">/</span><a class="crumb" href="/jobs/{{ job.id }}/takeoff" data-testid="nav-job" title="{{ job.name }}">{{ job.name }}</a>{% endif %}
+    <span class="spacer"></span>
+    {% block bar %}{% endblock %}
     {% if job %}
-    <a class="proj" href="/jobs/{{ job.id }}" data-testid="nav-job" title="{{ job.name }}">{{ job.name }}</a>
-    <nav class="tabs" data-testid="nav-tabs">
-      <a href="/jobs/{{ job.id }}" class="{{ 'on' if tab == 'sheets' }}" data-testid="tab-sheets">Sheets</a>
-      <a href="/jobs/{{ job.id }}/conditions" class="{{ 'on' if tab == 'conditions' }}" data-testid="tab-conditions">Conditions</a>
-      <a href="/jobs/{{ job.id }}/takeoff" class="{{ 'on' if tab == 'takeoff' }}" data-testid="tab-takeoff">Takeoff</a>
-      <a href="/jobs/{{ job.id }}/orders" class="{{ 'on' if tab == 'orders' }}" data-testid="tab-orders">Orders</a>
-      <a href="/jobs/{{ job.id }}/ewo" class="{{ 'on' if tab == 'ewo' }}" data-testid="tab-ewo">EWO</a>
-      <a href="/jobs/{{ job.id }}/pm" class="{{ 'on' if tab == 'pm' }}" data-testid="tab-pm">PM</a>
-      <a href="/review?job_id={{ job.id }}" class="{{ 'on' if tab == 'review' }}" data-testid="tab-review">Review</a>
-    </nav>
     <div class="costwrap">
       <button type="button" class="cost" id="cost" data-testid="cost-badge" aria-expanded="false" title="Every model call on this job, logged in MongoDB"><i class="dot"></i><b id="cost-n">·</b> AI decisions · <b id="cost-usd">$·</b></button>
       <div class="costpop" id="cost-pop" data-testid="cost-detail" hidden></div>
     </div>
-    {% else %}
-    <span class="tag">takeoff</span>
-    <nav class="tabs"><a href="/review" class="{{ 'on' if tab == 'review' }}" data-testid="tab-review-all">Review queue</a></nav>
     {% endif %}
   </header>
   <main class="page">{% block body %}{% endblock %}</main>

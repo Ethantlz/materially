@@ -122,3 +122,11 @@ def test_reason_summary_reads_mongo_rejection():
            "'missingProperties': ['layers_each_side']}]}")
     assert reason_summary(raw) == "Rejected by MongoDB's validator · gauge: 19 not allowed · missing: layers_each_side"
     assert reason_summary("Jev's two answers disagreed") == "Jev's two answers disagreed"
+
+
+def test_light_tokens_and_no_tab_nav(client):
+    css = (ROOT / "ui" / "static" / "app.css").read_text(encoding="utf-8")
+    for token in ("--ink: #111827", "--line: #e5e7eb", "--stage: #eef0f3", "--accent: #3b82f6"):
+        assert token in css
+    page = client.get(f"/jobs/{JOB_ID}/takeoff").text
+    assert 'data-testid="nav-tabs"' not in page and 'data-testid="nav-home"' in page
