@@ -55,7 +55,7 @@
     {% for p in products %}
     <tr data-testid="product-row">
       <td>{{ p.component }}</td>
-      <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.title or p.url }}</a>{% else %}{{ p.title or "—" }}{% endif %}
+      <td>{% if p.url is string and (p.url.startswith('http://') or p.url.startswith('https://')) %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.title or p.url }}</a>{% else %}{{ p.title or "—" }}{% endif %}
         <div class="muted small">{% for k, v in (p.attrs or {}).items() %}{{ k }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
       <td>{% for attr, pm in (p.spec_check or {}).items() %}
         <span class="chk {{ 'bad' if pm > SPEC_FLAG else 'ok' }}" data-testid="spec-check" title="P(mismatch) = {{ '%.2f' % pm }}">{{ attr }} {{ "✗ mismatch" if pm > SPEC_FLAG else "✓" }}</span>

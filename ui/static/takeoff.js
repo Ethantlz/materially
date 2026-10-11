@@ -42,6 +42,7 @@ const S = {
   meas: [], qty: new Map(), qtyOk: true, measOk: true,
   draft: null, sel: null, cal: null, cur: null, cursor: null, shift: false, space: false, down: null, qtySig: "",
   open: null, products: {}, productErrors: {},  // open = condition id whose materials are expanded; products = condition id -> {product_id: doc}; productErrors = condition id -> {material key: why its search failed}
+  pulling: new Set(),  // condition ids with a Pull product data request in flight (a re-render mustn't hand the button back mid-pull)
   addH: null,  // {cid, value}: the wall type whose "+ Height" form is open, and what has been typed in it
 };
 
@@ -272,8 +273,9 @@ function materialsHtml(c) {
     const why = !p && errs[m.key] ? ` <span class="small muted" data-testid="material-error">${esc(errs[m.key])}</span>` : "";
     return `<li class="mat" data-testid="material-row"><div>${esc(m.desc)}${m.source === "assumed" ? ' <span class="pill">assumed</span>' : ""}</div><div class="small">${product}${why}</div></li>`;
   }).join("");
+  const pulling = S.pulling.has(c.id);  // the 6 s poll re-renders this list: the button stays off for as long as the request runs
   const head = mats.length
-    ? `<div class="small" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 28px"><button class="btn-secondary sm" data-pull="${esc(c.id)}" data-testid="cond-pull-products">Pull product data</button><span class="muted">Searches your suppliers (Suppliers, top bar)</span></div>`
+    ? `<div class="small" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 28px"><button class="btn-secondary sm" data-pull="${esc(c.id)}" data-testid="cond-pull-products"${pulling ? " disabled" : ""}>${pulling ? "Pulling…" : "Pull product data"}</button><span class="muted">Searches your suppliers (Suppliers, top bar)</span></div>`
     : "";
   return `${head}<ul class="mats" data-testid="cond-materials">${rows || '<li class="muted small">No materials listed for this type.</li>'}</ul>`;
 }
@@ -770,10 +772,16 @@ $("#clist").addEventListener("click", async (e) => {
   const pull = e.target.closest("[data-pull]");
   if (pull) {  // every material of one condition in one pass through the procure lane (409 until the Firecrawl key exists)
     const cid = pull.dataset.pull;
+    if (S.pulling.has(cid)) return;  // one pull per condition at a time (the server answers 409 to a second)
+    S.pulling.add(cid);
     pull.disabled = true; pull.textContent = "Pulling…";
-    const r = await Takeoff.procure(cid);
-    if (!r.ok) {  // no key, or the search stopped on a Firecrawl error: say so and give the button back
+    let r;
+    try { r = await Takeoff.procure(cid); } finally { S.pulling.delete(cid); }
+    if (!r.ok) {  // no key, or the search stopped on a Firecrawl error: say so, show what it saved before it stopped, give the button back
       toast(errText(r, "Product search failed"), true);
+      const saved = await Takeoff.products(cid);  // products found before the stop are saved and linked to their materials
+      if (saved.ok) S.products[cid] = Object.fromEntries((saved.data || []).map((p) => [p.id, p]));
+      if (!(await reloadData(true))) renderConds();  // the pulling flag is clear: a re-render shows the enabled button again
       pull.disabled = false; pull.textContent = "Pull product data";
       return;
     }
@@ -781,7 +789,7 @@ $("#clist").addEventListener("click", async (e) => {
     S.products[cid] = { ...(S.products[cid] || {}), ...Object.fromEntries(found.map((p) => [p.id, p])) };
     S.productErrors[cid] = r.data.errors || {};  // what the pull couldn't find, under its own material row
     toast(`Found ${found.length} of ${(cond(cid)?.materials || []).length} products`);
-    await reloadData(true);  // the condition's materials now point at the products it just found
+    if (!(await reloadData(true))) renderConds();  // the condition's materials now point at the products it just found
     return;
   }
   const ex = e.target.closest("[data-expand]");
