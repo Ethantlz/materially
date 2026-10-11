@@ -1,12 +1,14 @@
 """Upload a drawing set; read back its sheets, conditions and rooms; re-parse a sheet picked by hand."""
+import math
 import re
 import shutil
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Body, File, Form, HTTPException, Response, UploadFile
+from pydantic import BaseModel, Field
 
 from app.db import get_db, jsonable, now, oid
 from app.settings import get_settings
+from extract import conditions
 from extract.analyze import parse_blocks
 from extract.ingest import ingest, read_sheet_page
 from extract.partitions import partition_blocks
@@ -70,6 +72,40 @@ def set_scale(sheet_id: str, body: ScaleIn):
     return doc
 
 
+@router.get("/sheets/{sheet_id}")
+def get_sheet(sheet_id: str):
+    """One sheet for the takeoff canvas: image_path, image_scale (px per PDF pt), size_pt and scale among the rest."""
+    sheet = get_db().sheets.find_one({"_id": oid(sheet_id)})
+    if not sheet:
+        raise HTTPException(404, "No such sheet.")
+    return jsonable(sheet)
+
+
+class CalibrateIn(BaseModel):
+    p1: tuple[float, float]  # PDF points
+    p2: tuple[float, float]
+    real_ft: float = Field(gt=0)
+
+
+@router.post("/sheets/{sheet_id}/calibrate")
+def calibrate(sheet_id: str, body: CalibrateIn):
+    """Set the scale from a known length: two points on the sheet and the real distance between them."""
+    distance = math.dist(body.p1, body.p2)
+    if distance < 1:
+        raise HTTPException(422, "Pick two points further apart.")
+    pt_per_ft = round(distance / body.real_ft, 4)
+    if not 0.01 <= pt_per_ft <= 1000:
+        raise HTTPException(422, f"{pt_per_ft} pt per ft is outside 0.01 to 1000; check the length.")
+    ratio = round(864 / pt_per_ft, 2)  # real length / paper length: 72 pt per paper inch x 12 in per ft
+    label = f"calibrated 1:{ratio:g}"
+    doc = {"label": label, "pt_per_ft": pt_per_ft, "ratio": ratio, "source": "manual", "confidence": 1.0,
+           "candidates": [label], "calibration": {"p1": list(body.p1), "p2": list(body.p2), "real_ft": body.real_ft}}
+    res = get_db().sheets.update_one({"_id": oid(sheet_id)}, {"$set": {"scale": doc}})
+    if not res.matched_count:
+        raise HTTPException(404, "No such sheet.")
+    return doc
+
+
 def _job_or_404(db, job_id: str) -> None:
     if not db.jobs.find_one({"_id": oid(job_id)}, {"_id": 1}):
         raise HTTPException(404, "No such job.")
@@ -86,7 +122,43 @@ def job_sheets(job_id: str):
 def job_conditions(job_id: str):
     db = get_db()
     _job_or_404(db, job_id)
-    return jsonable(list(db.conditions.find({"job_id": job_id}).sort([("type_tag", 1), ("_id", 1)])))
+    docs = list(db.conditions.find({"job_id": job_id}).sort([("type_tag", 1), ("_id", 1)]))
+    return jsonable(conditions.backfill(db, docs))
+
+
+@router.post("/jobs/{job_id}/conditions", status_code=201)
+def create_condition(job_id: str, body: dict = Body(...)):
+    """A condition typed in by hand: type_tag, studs, layers_each_side, sides, ... (name and color optional).
+    MongoDB's validator decides; a rejected one is in review_queue and the reason comes back as a 422."""
+    db = get_db()
+    _job_or_404(db, job_id)
+    doc, reason = _refusals(conditions.create, db, job_id, body)
+    if doc is None:
+        raise HTTPException(422, reason)
+    return jsonable(doc)
+
+
+@router.patch("/conditions/{condition_id}")
+def edit_condition(condition_id: str, body: dict = Body(...)):
+    return jsonable(_refusals(conditions.patch, get_db(), condition_id, body))
+
+
+@router.delete("/conditions/{condition_id}", status_code=204)
+def delete_condition(condition_id: str):
+    _refusals(conditions.delete, get_db(), condition_id)
+    return Response(status_code=204)
+
+
+@router.post("/conditions/{condition_id}/duplicate", status_code=201)
+def duplicate_condition(condition_id: str):
+    return jsonable(_refusals(conditions.duplicate, get_db(), condition_id))
+
+
+def _refusals(fn, *args):
+    try:
+        return fn(*args)
+    except conditions.Refused as e:
+        raise HTTPException(e.status, e.detail) from e
 
 
 @router.get("/jobs/{job_id}/rooms")

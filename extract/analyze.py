@@ -13,6 +13,7 @@ from bson import ObjectId
 from pymongo.database import Database
 
 from app import jev, router
+from extract import conditions
 from app.db import insert_or_review, oid, to_review
 from contracts.schemas import SHEET_KINDS
 from extract.partitions import Block, partition_blocks
@@ -78,10 +79,15 @@ def sort_sheet(db: Database, job_id: str, sheet: dict) -> str:
 def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectId | None:
     """One type tag's block -> a conditions doc, or a review_queue row (model failed, or MongoDB rejected it)."""
     sheet_id = str(sheet["_id"])
+    source = {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox}
     try:
         with _task_slots:
             out = router.run_task("parse_partition", block.text, "conditions", job_id=job_id, db=db)
     except router.TaskFailed as e:
+        if isinstance(e.result, dict):  # an answer that failed the contract: MongoDB's validator rejects it into review
+            routing = {"task": "parse_partition", "model": e.model, "escalated": True}
+            return insert_or_review(db, "conditions", {**e.result, "job_id": job_id, "source": source, "routing": routing},
+                                    "extract.partition")
         to_review(
             db,
             "extract.partition",
@@ -92,10 +98,10 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
     doc = {
         **out["result"],
         "job_id": job_id,
-        "source": {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox},
+        "source": source,
         "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
     }
-    return insert_or_review(db, "conditions", doc, "extract.partition")
+    return conditions.insert(db, doc, "extract.partition")
 
 
 def parse_blocks(db: Database, job_id: str, sheet: dict, blocks: list[Block]) -> list[ObjectId | None]:

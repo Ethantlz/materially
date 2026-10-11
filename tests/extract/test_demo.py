@@ -63,6 +63,7 @@ def test_a003_conditions_and_the_rejected_sb2(live_db, capsys):
                 print(f"  review {r['doc'].get('type_tag')}: {r['reason'][:200]}")
         assert [c["type_tag"] for c in conditions] == ["SA4", "SC2", "SC4", "SD4", "SH2", "SH4", "SH6"]
         assert [r["doc"]["type_tag"] for r in reviews] == ["SB2"]
+        assert "Document failed validation" in reviews[0]["reason"], "MongoDB itself rejects SB2"
         sizes = {c["type_tag"]: c["studs"]["size_in"] for c in conditions}
         assert sizes == {"SA4": 3.625, "SC2": 2.5, "SC4": 3.625, "SD4": 3.625, "SH2": 2.5, "SH4": 4, "SH6": 6}
     finally:
