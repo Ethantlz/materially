@@ -209,3 +209,4 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - cond-add-height | /jobs/{job}/takeoff | "+ Height" under a wall type: opens the form that adds the same type at another wall height (js)
 - cond-height-input | /jobs/{job}/takeoff | wall height in feet for the new sub-condition; Enter or Add creates it (js)
 - cond-sub-row | /jobs/{job}/takeoff | a sub-condition (the wall type at another height), indented under its parent; click makes it active (js)
+- cond-pull-products | /jobs/{job}/takeoff | Pull product data for every material of an expanded condition (js)

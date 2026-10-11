@@ -125,6 +125,7 @@ window.costBadge = (job) => {
     addHeight: (cid, h) => route("addHeight", "POST", [`/api/conditions/${cid}/subconditions`], { height_ft: h }), // extract: a wall type at another height
     findProducts: (cid, key) => route("findProducts", "POST", [`/api/conditions/${cid}/materials/${encodeURIComponent(key)}/products`]), // procure
     products: (cid) => route("products", "GET", [`/api/conditions/${cid}/products`]),                     // procure
+    procure: (cid) => route("procure", "POST", [`/api/conditions/${cid}/procure`]),                       // procure (all materials)
 
     async measurements(sheet, alt) {                                                                      // pipeline
       const q = alt ? `?alternate_id=${encodeURIComponent(alt)}` : "";
