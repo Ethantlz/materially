@@ -5,6 +5,7 @@
 
 Writes go through insert_or_review / update_one on the validated collection, so MongoDB's $jsonSchema decides.
 """
+import copy
 import threading
 import zlib
 from fractions import Fraction
@@ -29,6 +30,13 @@ BOARD_LABELS = {
 CONTENT = ("type_tag", "studs", "layers_each_side", "sides", "insulation", "fire_rating", "ul_assembly", "stc",
            "height_ft", "name", "color")
 _writing = threading.Lock()  # colour pick + insert, so parallel parses don't take the same free colour
+# Trade sizes a metric drawing's conversions land near (92 mm -> 3.622", 400 mm -> 15.75", 16 mm -> 0.63"),
+# with how close (fraction of the size) a value must be to snap.
+NOMINAL = {
+    "size_in": ([1.625, 2.5, 3.5, 3.625, 4, 6, 8, 10], 0.015),
+    "spacing_in": ([12, 16, 19.2, 24], 0.025),
+    "thickness_in": ([0.25, 0.375, 0.5, 0.625, 0.75, 1], 0.04),
+}
 
 
 class Refused(Exception):
@@ -67,6 +75,29 @@ def name_for(c: dict) -> str:
     if layers:
         layers += " o.s." if c.get("sides") == 1 else " e.s."
     return " - ".join(part for part in (c.get("type_tag") or "?", " ".join(stud), layers) if part)
+
+
+def _snap(value, field: str):
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return value
+    sizes, tol = NOMINAL[field]
+    best = min(sizes, key=lambda size: abs(size - value))
+    return best if abs(best - value) <= tol * best else value
+
+
+def nominal(result: dict) -> tuple[dict, dict]:
+    """A copy of a parsed condition with stud size, spacing and board thickness snapped to the trade size they
+    convert from, and {field path: value as parsed} for each one that moved."""
+    out, changed = copy.deepcopy(result), {}
+    studs = out.get("studs")
+    for key in ("size_in", "spacing_in"):
+        if isinstance(studs, dict) and _snap(studs.get(key), key) != studs.get(key):
+            changed[f"studs.{key}"], studs[key] = studs[key], _snap(studs[key], key)
+    for i, layer in enumerate(out.get("layers_each_side") or []):
+        if isinstance(layer, dict) and _snap(layer.get("thickness_in"), "thickness_in") != layer.get("thickness_in"):
+            changed[f"layers_each_side.{i}.thickness_in"] = layer["thickness_in"]
+            layer["thickness_in"] = _snap(layer["thickness_in"], "thickness_in")
+    return out, changed
 
 
 def preferred(tag: str) -> int:
