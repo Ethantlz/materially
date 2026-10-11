@@ -91,7 +91,6 @@ Why: the takeoff canvas colours measurements by condition and the "+ New conditi
 Workaround in place: `static/api.js` tries the real route and, only when it answers "route missing" (FastAPI's 404 `{"detail":"Not Found"}` or a 405), falls back to `/ui/standin/*` in `ui/standins.py` (calibrate, condition create, and a copy of the measurement routes). Both write the same collections as the real routes, so nothing diverges. The toolbar shows an amber "stand-in API" chip while any fallback is in use. Delete `ui/standins.py`, its `include_router` line in `ui/api.py`, and the second URL of each route in `static/api.js` once the lanes have merged.
 Status: open
 
-<<<<<<< HEAD
 ### ui · 15:10 · observations from running the demo set (WCU, 28 sheets) and the live paths
 - `POST /api/jobs` with `fixtures/demo.pdf` on lane3 yields one condition (SD4, no `name`/`color`); the others were not parsed or went to review. That is lane 1's output, not a UI issue, but the takeoff beat on A100 needs conditions to click, so the form is the fallback.
 - Pipeline paths verified end to end from the browser on lane3: measure on A-101 (60 LF for 540 pt at 9 pt/ft), quantities, `POST /api/jobs/{id}/conditions/{cid}/order`, padded board line trips the guard, `POST /api/orders/{id}/send`, `GET /api/orders/{id}/po` in the preview panel, SSE `/events/pm` (a draft inserted in MongoDB shows up in 0.2 s).
