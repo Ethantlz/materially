@@ -27,9 +27,12 @@ PRICES = {
 
 
 class TaskFailed(RuntimeError):
-    def __init__(self, task: str, reason: str, raw: str | None = None):
+    """Every model failed. `result` is the latest answer that parsed but failed the contract (None if none parsed):
+    callers write it with insert_or_review so MongoDB's own validator rejects it into review_queue."""
+
+    def __init__(self, task: str, reason: str, raw: str | None = None, result: dict | None = None, model: str | None = None):
         super().__init__(f"{task}: {reason}")
-        self.task, self.reason, self.raw = task, reason, raw
+        self.task, self.reason, self.raw, self.result, self.model = task, reason, raw, result, model
 
 
 def cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -111,7 +114,8 @@ def system_prompt(task: str, policy: dict, validator_name: str | None, system: s
 
 
 def _attempt(db, task, model, system, user, validator_name, job_id):
-    """One call. Returns (result, None, raw) on success or (None, reason, raw)."""
+    """One call. Returns (result, None, raw) on success, or (result, reason, raw) where result is the parsed
+    answer that failed the contract, or None when the call failed or the JSON didn't parse."""
     t0 = time.perf_counter()
     try:
         text, tin, tout = call_model(model, system, user)
@@ -132,7 +136,7 @@ def _attempt(db, task, model, system, user, validator_name, job_id):
         db, task=task, model=model, input_tokens=tin, output_tokens=tout, cost_usd=cost_usd(model, tin, tout),
         ms=ms, job_id=job_id, ok=reason is None, error=reason,
     )
-    return (result, None, text) if reason is None else (None, reason, text)
+    return result, reason, text
 
 
 def run_task(task: str, payload, validator_name: str | None = None, *, job_id=None, system: str | None = None, db=None) -> dict:
@@ -149,9 +153,12 @@ def run_task(task: str, payload, validator_name: str | None = None, *, job_id=No
     if policy.get("retry_model"):
         attempts.append((policy["retry_model"], True))
     reason = raw = None
+    candidate = candidate_model = None
     for model, escalated in attempts:
         prompt = user if reason is None else f"{user}\n\nA previous answer was rejected: {reason}\nReturn corrected JSON only."
         result, reason, raw = _attempt(db, task, model, sys_prompt, prompt, validator_name, job_id)
         if reason is None:
             return {"result": result, "model": model, "escalated": escalated}
-    raise TaskFailed(task, reason, raw)
+        if isinstance(result, dict):
+            candidate, candidate_model = result, model
+    raise TaskFailed(task, reason, raw, result=candidate, model=candidate_model)

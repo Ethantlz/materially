@@ -112,3 +112,12 @@ def test_run_task_raises_when_both_fail(db, monkeypatch):
     with pytest.raises(TaskFailed) as e:
         run_task("parse_partition", "A1 ...", "conditions", db=db)
     assert "JSON" in e.value.reason
+    # the last answer that parsed rides along, so the caller can let MongoDB's validator reject it
+    assert e.value.result == parse_json(BAD) and e.value.model == "deepseek-ai/DeepSeek-V4.1-Flash"
+
+
+def test_task_failed_carries_latest_invalid_answer(db, monkeypatch):
+    monkeypatch.setattr(router, "call_model", _fake({"deepseek-ai/DeepSeek-V4.1-Flash": [BAD], "claude-sonnet-5-5": [BAD]}))
+    with pytest.raises(TaskFailed) as e:
+        run_task("parse_partition", "A1 ...", "conditions", db=db)
+    assert e.value.result == parse_json(BAD) and e.value.model == "claude-sonnet-5-5"
