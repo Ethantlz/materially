@@ -121,11 +121,12 @@ function loadImage() {
 }
 async function openSheet(id) {
   if (S.draft) finishDraft();
+  const alt = S.altId;  // the alternate this request is for: a late answer for a view that is gone must not be painted
   S.sheetId = id; S.sel = null; S.cal = null; S.meas = []; S.cur = null;
   hideCalPop(); hideMenus(); syncUrl();
   renderSheetSelect(); renderToolbar(); loadImage();
   const m = await Takeoff.measurements(id, S.altId);
-  if (id !== S.sheetId) return;
+  if (id !== S.sheetId || alt !== S.altId) return;
   S.meas = m.ok ? m.items : []; S.measOk = m.ok;
   renderMeas(); renderToolbar();
 }
@@ -432,7 +433,7 @@ function addPoint(p) {
   const c = cond();
   if (!c) return needCondition();
   if ((S.tool === "linear" || S.tool === "area") && !ptPerFt()) return needScale();
-  if (!S.draft || S.draft.kind !== S.tool) S.draft = { kind: S.tool, points: [], cond: c.id, sheet: S.sheetId };
+  if (!S.draft || S.draft.kind !== S.tool) S.draft = { kind: S.tool, points: [], cond: c.id, sheet: S.sheetId, alt: S.altId };
   const d = S.draft;
   if (d.kind === "area" && d.points.length >= 3) {  // clicking the first corner closes the area
     const a = toView(p), b = toView(d.points[0]);
@@ -454,7 +455,9 @@ async function finishDraft() {
   if (d.points.length < MIN_PTS[d.kind]) return cancelDraft();
   S.draft = null; S.cur = null;
   const c = cond(d.cond), pts = d.points.map((p) => [r1(p[0]), r1(p[1])]);
-  const body = { job_id: S.job.id, sheet: d.sheet, condition_id: d.cond, kind: d.kind, points: pts, height_ft: c?.height_ft ?? null, alternate_id: S.altId };
+  // The draft carries the alternate it was drawn in (tagged at creation), so a retry after a failed save and a
+  // shape still being drawn when the dropdown changes both land in the right alternate.
+  const body = { job_id: S.job.id, sheet: d.sheet, condition_id: d.cond, kind: d.kind, points: pts, height_ft: c?.height_ft ?? null, alternate_id: d.alt || S.altId };
   const tmp = { id: "tmp-" + Date.now(), ...body, quantity: localQty(d.kind, pts, d.sheet), unit: UNIT[d.kind], pending: true };
   if (d.sheet === S.sheetId) S.meas.push(tmp);
   renderMeas(); renderDraft(); renderQty();
@@ -657,7 +660,8 @@ $("#alt-select").addEventListener("change", async (e) => {
   // alternate it was drawn in, drop the selection, then re-fetch the sheet's measurements for the new alternate
   // and redraw the canvas (refresh() does both; opening a sheet reloads its measurements the same way).
   if (S.draft) await finishDraft();
-  S.altId = e.target.value; S.sel = null; syncUrl(); renderMeas();
+  if (S.draft) cancelDraft();  // the save failed: it can't be retried under another alternate
+  S.altId = e.target.value; S.sel = null; S.meas = []; syncUrl(); renderMeas();
   await refresh();
 });
 
