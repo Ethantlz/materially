@@ -1,3 +1,5 @@
+import pytest
+
 from contracts.validate import errors_for
 from contracts.schemas import MATERIAL
 from extract.materials import derive
@@ -46,3 +48,26 @@ def test_plain_condition_without_text_gets_the_core_materials():
 def test_unrated_wall_gets_acoustical_sealant():
     ms = derive({**SA4, "fire_rating": None}, "FILL GAPS W/ ACOUSTICAL SEALANT")
     assert any(m["key"] == "sealant_acoustical" for m in ms)
+
+
+def test_resilient_channel_gauge_outside_the_contract_stays_in_the_description():
+    """A 24 ga RC callout has no slot in MATERIAL's GAUGES; the row still writes, with the number in desc."""
+    ms = derive(SA4, '24 GA. RESILIENT CHANNEL @ 16" OC BOTH SIDES')
+    rc = next(m for m in ms if m["role"] == "resilient_channel")
+    assert rc["gauge"] is None and "24 ga" in rc["desc"]
+    assert all(errors_for(MATERIAL, m) == [] for m in ms), ms
+
+
+@pytest.mark.parametrize("condition", [
+    {},
+    {"studs": None},
+    {"studs": {"size_in": 3.625, "gauge": 20, "spacing_in": 16}},
+    {"studs": {"size_in": 3.625, "gauge": None, "spacing_in": 16},
+     "layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}]},  # no "sides"
+    {"type_tag": "SA4", "studs": {"size_in": None, "gauge": None, "spacing_in": None}, "layers_each_side": None},
+])
+def test_partial_conditions_never_raise_and_only_yield_valid_materials(condition):
+    ms = derive(condition)
+    assert len({m["key"] for m in ms}) == len(ms)
+    for m in ms:
+        assert errors_for(MATERIAL, m) == [], m
