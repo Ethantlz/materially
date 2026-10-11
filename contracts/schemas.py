@@ -168,7 +168,9 @@ VALIDATORS: dict[str, dict] = {
             "height_ft": {"bsonType": ["number", "null"], "minimum": 1, "maximum": 60},
             "source": {
                 "bsonType": "object",
-                "properties": {"sheet": _STR, "page": _NUM, "bbox": {"bsonType": "array", "items": _NUM}},
+                # text_hash: sha1 of the block text this condition was parsed from, so a re-scan can skip it
+                "properties": {"sheet": _STR, "page": _NUM, "bbox": {"bsonType": "array", "items": _NUM},
+                               "text_hash": _STR_OR_NULL},
             },
             "routing": {"bsonType": "object"},
         },

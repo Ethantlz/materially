@@ -82,6 +82,22 @@ def test_expected_labels_match_contract(path):
             assert validate("conditions", cond, ai=True) == [], cond.get("type_tag")
 
 
+def test_parse_partition_policy_skips_thinking(db):
+    """Measured: parse_partition with DeepSeek's thinking on took 62 s a block through LiteLLM, with it off 0.7 s.
+    The router hands policy.params to the primary model, so the seeded row carries FAST's extra_body and its own caps."""
+    params = db.model_policy.find_one({"task": "parse_partition"})["params"]
+    assert params["extra_body"]["chat_template_kwargs"] == {"thinking": False, "enable_thinking": False}
+    assert params["extra_body"]["reasoning_effort"] == "none"
+    assert params["max_tokens"] == 1500 and params["timeout_s"] == 30
+
+
+def test_setup_backfills_params_for_parse_partition(db):
+    """A row seeded before params existed gets them on the next setup run (an admin's own params are left alone)."""
+    db.model_policy.update_one({"task": "parse_partition"}, {"$unset": {"params": ""}})
+    setup(db)
+    assert db.model_policy.find_one({"task": "parse_partition"})["params"]["max_tokens"] == 1500
+
+
 def test_setup_is_idempotent(db):
     setup(db)
     assert db.model_policy.count_documents({}) == len(MODEL_POLICY)
@@ -99,7 +115,7 @@ def test_system_prompt_carries_schema():
 
 
 def _fake(replies: dict[str, list[str]]):
-    def call(model, system, user):
+    def call(model, system, user, params=None):
         return replies[model].pop(0), 100, 20
     return call
 

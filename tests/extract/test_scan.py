@@ -1,5 +1,7 @@
+import hashlib
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 
 from bson import ObjectId
 from fastapi.testclient import TestClient
@@ -16,7 +18,19 @@ GOOD = ('{"type_tag": "%s", "studs": {"size_in": 3.625, "gauge": 20, "spacing_in
 
 
 def _fake_model(monkeypatch):
-    monkeypatch.setattr(model_router, "call_model", lambda model, system, user: (GOOD % user.split()[0], 10, 10))
+    monkeypatch.setattr(model_router, "call_model", lambda model, system, user, params=None: (GOOD % user.split()[0], 10, 10))
+
+
+def _counting_model(monkeypatch):
+    """A fake model that records every prompt it is sent (parse_partition gets policy.params as a 4th argument)."""
+    calls: list[str] = []
+
+    def call(model, system, user, params=None):
+        calls.append(user)
+        return GOOD % user.split()[0], 10, 10
+
+    monkeypatch.setattr(model_router, "call_model", call)
+    return calls
 
 
 def test_scan_without_partition_sheet_is_422(mock_db, monkeypatch):
@@ -93,3 +107,39 @@ def test_rescan_keeps_product_id_and_person_edits(mock_db, monkeypatch, tmp_path
     kept = {m["key"]: m.get("product_id") for m in doc["materials"]}
     assert kept["stud"] == "prod_stud_1"
     assert kept["board_0.625_type_x"] is None, "a row with no product found stays unfound"
+
+
+def test_rescan_of_unchanged_blocks_makes_no_model_calls(mock_db, monkeypatch, tmp_path):
+    """A block's text is hashed onto its condition (source.text_hash); a re-scan of the same drawing hands every
+    block back as-is, so a scan after a scale change or a double-click costs no model time at all."""
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    calls = _counting_model(monkeypatch)
+    job, sheet, blocks = _job_sheet_blocks(tmp_path)
+    first = analyze.parse_blocks(mock_db, job, sheet, blocks)
+    assert len(calls) == len(blocks) == 3
+    calls.clear()
+    second = analyze.parse_blocks(mock_db, job, sheet, blocks)
+    assert calls == []
+    assert sorted(map(str, first)) == sorted(map(str, second))
+    assert mock_db.conditions.count_documents({"job_id": job}) == 3
+    for c in mock_db.conditions.find({"job_id": job}):
+        assert c["source"]["text_hash"] == hashlib.sha1(
+            next(b.text for b in blocks if b.tag == c["type_tag"]).strip().encode()).hexdigest()
+
+
+def test_a_changed_block_is_parsed_again(mock_db, monkeypatch, tmp_path):
+    """The drawing was revised: the block's text (and so its hash) changed, so that block goes back to the model."""
+    monkeypatch.setenv("DB_NAME", mock_db.name)
+    calls = _counting_model(monkeypatch)
+    job, sheet, blocks = _job_sheet_blocks(tmp_path)
+    analyze.parse_blocks(mock_db, job, sheet, blocks)
+    tag = blocks[0].tag
+    before = mock_db.conditions.find_one({"type_tag": tag})["_id"]
+    calls.clear()
+    edited = [replace(blocks[0], body=(blocks[0].body or "") + "\nSTUD SPACING: 24 O.C."), *blocks[1:]]
+    ids = analyze.parse_blocks(mock_db, job, sheet, edited)
+    assert len(calls) == 1 and "STUD SPACING: 24 O.C." in calls[0]
+    doc = mock_db.conditions.find_one({"type_tag": tag})
+    assert doc["_id"] == before and ids[0] == before
+    assert doc["source"]["text_hash"] == hashlib.sha1(edited[0].text.strip().encode()).hexdigest()
+    assert mock_db.conditions.count_documents({"job_id": job}) == 3
