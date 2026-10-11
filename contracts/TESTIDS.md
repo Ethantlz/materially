@@ -206,3 +206,4 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - ewos-empty | /jobs/{job}/pm | empty row of the PM page's field EWOs table
 - drawer-orders | /jobs/{job}/takeoff | the quantities drawer's "Orders →" link: opens the orders popup (full-page orders list where the popup script is missing)
 - material-error | /jobs/{job}/takeoff | why "Find product" failed, shown in that material row until the next try (js)
+- cond-pull-products | /jobs/{job}/takeoff | Pull product data for every material of an expanded condition (js)

@@ -124,6 +124,7 @@ window.costBadge = (job) => {
     scan: (job) => route("scan", "POST", [`/api/jobs/${job}/conditions/scan`]),                           // extract
     findProducts: (cid, key) => route("findProducts", "POST", [`/api/conditions/${cid}/materials/${encodeURIComponent(key)}/products`]), // procure
     products: (cid) => route("products", "GET", [`/api/conditions/${cid}/products`]),                     // procure
+    procure: (cid) => route("procure", "POST", [`/api/conditions/${cid}/procure`]),                       // procure (all materials)
 
     async measurements(sheet, alt) {                                                                      // pipeline
       const q = alt ? `?alternate_id=${encodeURIComponent(alt)}` : "";

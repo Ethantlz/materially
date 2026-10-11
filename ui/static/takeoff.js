@@ -41,7 +41,7 @@ const S = {
   k: 1, tx: 0, ty: 0, fitK: 1, fitted: true, iw: 0, ih: 0, ips: 1.5, loaded: false,
   meas: [], qty: new Map(), qtyOk: true, measOk: true,
   draft: null, sel: null, cal: null, cur: null, cursor: null, shift: false, space: false, down: null, qtySig: "",
-  open: null, products: {},  // open = condition id whose materials are expanded; products = condition id -> {product_id: doc}
+  open: null, products: {}, productErrors: {},  // open = condition id whose materials are expanded; products = condition id -> {product_id: doc}; productErrors = condition id -> {material key: why its search failed}
 };
 
 const SPEC_FLAG = 0.7;  // P(mismatch) above this marks a spec check as a warning
@@ -214,18 +214,31 @@ function condRow(c, i) {
 }
 
 // What a wall type is built from: one row per material, linked to its product_data doc once it has been searched.
+// The header pulls the whole condition in one pass; whatever the server couldn't find for a single material comes
+// back in S.productErrors and stays under that material's row. The muted note says where the supplier list lives.
 function materialsHtml(c) {
-  const prods = S.products[c.id] || {};
-  const rows = (c.materials || []).map((m) => {
+  const prods = S.products[c.id] || {}, errs = S.productErrors[c.id] || {};
+  // a url from a supplier page is scraped text: only http(s) is ever rendered as a link (no javascript: hrefs)
+  const isUrl = (u) => /^https?:\/\//.test(String(u || ""));
+  const mats = c.materials || [];
+  const rows = mats.map((m) => {
     const p = m.product_id && prods[m.product_id];
     const checks = p ? Object.entries(p.spec_check || {}).map(([a, v]) =>
       `<span class="pill ${v > SPEC_FLAG ? "bad" : "ok"}" title="P(mismatch) ${v}">${esc(a)} ${v > SPEC_FLAG ? "✗" : "✓"}</span>`).join(" ") : "";
+    const unchecked = p && p.checked === false ? ' <span class="pill">unchecked</span>' : "";
+    const title = p ? esc(p.title || "product sheet") : "";
     const product = p
-      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" data-testid="material-product">${esc(p.title || "product sheet")}</a> ${checks}`
+      ? (isUrl(p.url)
+        ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" data-testid="material-product">${title}</a> ${checks}${unchecked}`
+        : `<span data-testid="material-product">${title}</span> ${checks}${unchecked}`)
       : `<button class="btn-ghost sm" data-find="${esc(m.key)}" data-testid="material-find">Find product</button>`;
-    return `<li class="mat" data-testid="material-row"><div>${esc(m.desc)}${m.source === "assumed" ? ' <span class="pill">assumed</span>' : ""}</div><div class="small">${product}</div></li>`;
+    const why = !p && errs[m.key] ? ` <span class="small muted" data-testid="material-error">${esc(errs[m.key])}</span>` : "";
+    return `<li class="mat" data-testid="material-row"><div>${esc(m.desc)}${m.source === "assumed" ? ' <span class="pill">assumed</span>' : ""}</div><div class="small">${product}${why}</div></li>`;
   }).join("");
-  return `<ul class="mats" data-testid="cond-materials">${rows || '<li class="muted small">No materials listed for this type.</li>'}</ul>`;
+  const head = mats.length
+    ? `<div class="small" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 28px"><button class="btn-secondary sm" data-pull="${esc(c.id)}" data-testid="cond-pull-products">Pull product data</button><span class="muted">Searches your suppliers (Suppliers, top bar)</span></div>`
+    : "";
+  return `${head}<ul class="mats" data-testid="cond-materials">${rows || '<li class="muted small">No materials listed for this type.</li>'}</ul>`;
 }
 function renderConds() {
   const list = $("#clist");
@@ -669,6 +682,23 @@ $("#alt-select").addEventListener("change", async (e) => {
 });
 
 $("#clist").addEventListener("click", async (e) => {
+  const pull = e.target.closest("[data-pull]");
+  if (pull) {  // every material of one condition in one pass through the procure lane (409 until the Firecrawl key exists)
+    const cid = pull.dataset.pull;
+    pull.disabled = true; pull.textContent = "Pulling…";
+    const r = await Takeoff.procure(cid);
+    if (!r.ok) {  // no key, or the search stopped on a Firecrawl error: say so and give the button back
+      toast(errText(r, "Product search failed"), true);
+      pull.disabled = false; pull.textContent = "Pull product data";
+      return;
+    }
+    const found = r.data.products || [];
+    S.products[cid] = { ...(S.products[cid] || {}), ...Object.fromEntries(found.map((p) => [p.id, p])) };
+    S.productErrors[cid] = r.data.errors || {};  // what the pull couldn't find, under its own material row
+    toast(`Found ${found.length} of ${(cond(cid)?.materials || []).length} products`);
+    await reloadData(true);  // the condition's materials now point at the products it just found
+    return;
+  }
   const ex = e.target.closest("[data-expand]");
   if (ex) {  // expand a condition into the materials it is built from
     const id = ex.dataset.expand;
