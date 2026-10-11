@@ -131,6 +131,23 @@ def test_policy_params_reach_the_primary_model_only(db, monkeypatch):
     assert seen == [("deepseek-ai/DeepSeek-V4.1-Flash", {"max_tokens": 900}), ("claude-sonnet-5-5", None)]
 
 
+def test_no_retry_when_the_drawing_just_doesnt_say(db, monkeypatch):
+    """SB2-style 'STUD SIZE: SEE UL DET.': a retry could only invent a size, so MongoDB gets the null to reject."""
+    calls = []
+    sb2 = ('{"type_tag": "SB2", "studs": {"size_in": null, "gauge": null, "spacing_in": 16}, '
+           '"layers_each_side": [{"thickness_in": 0.625, "board_type": "type_x"}], "sides": null}')
+
+    def call(model, system, user, params=None):
+        calls.append(model)
+        return sb2, 100, 20
+
+    monkeypatch.setattr(router, "call_model", call)
+    with pytest.raises(TaskFailed) as e:
+        run_task("parse_partition", "SB2 ...", "conditions", db=db)
+    assert calls == ["deepseek-ai/DeepSeek-V4.1-Flash"]
+    assert e.value.result["studs"]["size_in"] is None and e.value.model == "deepseek-ai/DeepSeek-V4.1-Flash"
+
+
 def test_task_failed_carries_latest_invalid_answer(db, monkeypatch):
     monkeypatch.setattr(router, "call_model", _fake({"deepseek-ai/DeepSeek-V4.1-Flash": [BAD], "claude-sonnet-5-5": [BAD]}))
     with pytest.raises(TaskFailed) as e:

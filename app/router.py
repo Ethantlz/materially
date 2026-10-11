@@ -143,6 +143,15 @@ def _attempt(db, task, model, system, user, validator_name, job_id, params=None)
     return result, reason, text
 
 
+_NULL_ERROR = re.compile(r"got NoneType None$|: None not one of ")
+
+
+def _only_missing(reason: str | None) -> bool:
+    """True when every contract error is a value the model left null ("SEE UL DET.", "per spec")."""
+    parts = [p.strip() for p in (reason or "").split(";") if p.strip()]
+    return bool(parts) and all(_NULL_ERROR.search(p) for p in parts)
+
+
 def run_task(task: str, payload, validator_name: str | None = None, *, job_id=None, system: str | None = None, db=None) -> dict:
     db = db if db is not None else get_db()
     policy = db.model_policy.find_one({"task": task})
@@ -159,6 +168,8 @@ def run_task(task: str, payload, validator_name: str | None = None, *, job_id=No
     reason = raw = None
     candidate = candidate_model = None
     for model, escalated in attempts:
+        if escalated and _only_missing(reason):
+            break  # the model said "not on the drawing"; a retry could only invent a value, so let MongoDB reject it
         prompt = user if reason is None else f"{user}\n\nA previous answer was rejected: {reason}\nReturn corrected JSON only."
         params = None if escalated else policy.get("params")  # options belong to the primary model only
         result, reason, raw = _attempt(db, task, model, sys_prompt, prompt, validator_name, job_id, params)
