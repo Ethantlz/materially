@@ -2,7 +2,7 @@
    Tokens come from the design system in app.css (Task 7); --bar is the top bar's height. */
 body.app { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 body.app main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 0; }
-.tk { display: grid; grid-template-columns: 300px 1fr; grid-template-rows: 44px 1fr auto; height: calc(100vh - var(--bar, 56px)); background: var(--stage); position: relative; }
+.tk { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: 44px 1fr auto; height: calc(100vh - var(--bar, 56px)); background: var(--stage); position: relative; }
 .tk-left { grid-row: 1 / 4; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 .tk-tools { grid-column: 2; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 5; }
 #viewport { grid-column: 2; position: relative; overflow: hidden; }
@@ -94,8 +94,9 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--accent)
 .qempty { padding: 26px 10px; text-align: center; color: var(--muted); }
 
 /* ---- conditions panel (left) ---- */
-.phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 2; }
-.phead h2 { margin: 0; flex: 1; }
+.phead { display: flex; align-items: center; gap: 8px; row-gap: 6px; flex-wrap: wrap; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.phead h2 { margin: 0; flex: 1 1 100%; }  /* the title takes its own row, so the two buttons stay on one row */
+.phead button { flex: 0 0 auto; }
 .clist { padding: 6px 0 18px; flex: 1; overflow-y: auto; min-height: 0; }
 .crow { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 11px; padding: 9px 12px 9px 0; margin: 0; cursor: pointer; border-bottom: 1px solid var(--line); position: relative; outline: 0; }
 .cswatch { background: var(--c); border-radius: 0 3px 3px 0; }

@@ -141,9 +141,12 @@ function syncUrl() {
 // The selected alternate scopes both the drawer totals and the shapes on the canvas (D3), so every refresh
 // re-reads the current sheet's measurements for S.altId and redraws them.
 async function refresh() {
-  const sid = S.sheetId;
+  // alt is the alternate this request is for (read with the sheet, before the awaits): if either changes while the
+  // request is in flight, its answer belongs to a view that is gone and must not be painted.
+  const sid = S.sheetId, alt = S.altId;
   const [m, q] = await Promise.all([sid ? Takeoff.measurements(sid, S.altId) : { ok: true, items: [] }, Takeoff.quantities(S.job.id, S.altId)]);
-  if (sid === S.sheetId) { S.meas = m.ok ? m.items : []; S.measOk = m.ok; }
+  if (sid === S.sheetId && alt === S.altId) { S.meas = m.ok ? m.items : []; S.measOk = m.ok; }
+  else if (alt !== S.altId) return;
   S.qty = new Map(q.rows.map((x) => [x.cid, x])); S.qtyOk = q.ok;
   renderAll();
 }
@@ -274,7 +277,7 @@ function renderQty() {
   empty.hidden = !!rows.length;
   empty.textContent = !S.qtyOk
     ? "The quantities endpoint isn't answering yet, so nothing can be totalled. It lands with the pipeline lane."
-    : "No measurements yet. Pick a condition on the right, press L, and click along a wall.";
+    : "No measurements yet. Pick a condition on the left, press L, and click along a wall.";
   const cell = (v, d, cls = "") => `<td class="num ${v ? "" : "zero"} ${cls}">${v ? fmtNum(v, d) : "—"}</td>`;
   $("#qty-body").innerHTML = rows.map(({ c, q }) => `<tr data-testid="qty-row" data-cid="${c.id}">
     <td style="white-space:nowrap"><span class="swatch" style="background:${esc(c.color)}"></span><b>${esc(c.type_tag)}</b> <span class="muted">${esc(shortName(c))}</span></td>
@@ -389,7 +392,7 @@ function updateHint() {
   else if (S.focus && S.focus.sheet === sh.id && S.tool === "select") html = `Source of <b>${esc(S.focus.tag)}</b> on ${esc(sh.sheet_no || "this sheet")} <button type="button" id="clear-focus">Clear</button>`;
   else if (S.tool === "select") html = `<b>Select</b> <span class="dim">· click a measurement, Delete removes it · pick a condition to measure</span>`;
   else if (S.tool === "calibrate") html = `<b>Calibrate</b> <span class="dim">· ${S.cal && !S.cal.p2 ? "click the second point" : "click two points on a dimension you know"}</span>`;
-  else if (!c) html = `<span class="dim">Pick a condition on the right to measure</span>`;
+  else if (!c) html = `<span class="dim">Pick a condition on the left to measure</span>`;
   else {
     const m = S.draft ? draftMetrics() : null;
     html = `<span class="dot" style="background:${esc(c.color)}"></span><b>${esc(c.type_tag)}</b> <span class="dim">· ${KIND_NAME[S.tool]}</span>` +
@@ -413,7 +416,7 @@ function setCond(id, arm = true) {
   if (arm && (S.tool === "select" || S.tool === "calibrate")) setTool("linear"); else { renderToolbar(); updateHint(); }
 }
 function flash(el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
-function needCondition() { toast("Pick a condition on the right first.", true); flash($("#panel")); }
+function needCondition() { toast("Pick a condition on the left first.", true); flash($("#panel")); }
 function needScale() { toast("Set or calibrate this sheet's scale first.", true); flash($("#noscale")); }
 
 function snap(p) {  // shift: constrain the next point to 45 degree steps from the last
@@ -540,8 +543,13 @@ function showScaleMenu() {
   if (!m.hidden) return (m.hidden = true);
   $("#help").hidden = true;
   m.innerHTML = B.scaleLabels.filter((l) => l !== "NTS").map((l) => `<button type="button" data-label="${esc(l)}" class="${l === cur ? "cur" : ""}">${esc(l)}</button>`).join("") +
-    `<hr><button type="button" data-cal style="font-family:system-ui;color:var(--accent-text)">Calibrate on a known dimension… (K)</button>`;
-  m.style.top = "8px"; m.style.right = "10px"; m.hidden = false;
+    `<hr><button type="button" data-cal style="font-family:system-ui;color:var(--accent)">Calibrate on a known dimension… (K)</button>`;
+  // Anchor it under the chip (which sits beside Undo, on the left), not at the canvas' top-right corner. The menu is
+  // absolute inside #viewport, so this is relative to the offset parent and clamped so the overflow:hidden can't clip.
+  const chip = $("#scale-chip").getBoundingClientRect(), pa = (m.offsetParent || document.body).getBoundingClientRect();
+  m.style.left = `${Math.max(0, Math.min(chip.left - pa.left, pa.width - 210))}px`;
+  m.style.top = `${Math.max(8, chip.bottom - pa.top + 6)}px`;
+  m.style.right = "auto"; m.hidden = false;
 }
 async function chooseScale(label) {
   hideMenus();
@@ -631,7 +639,7 @@ document.addEventListener("keyup", (e) => {
 });
 window.addEventListener("blur", () => { S.space = false; S.shift = false; vp.classList.remove("space"); });
 
-// ---------------------------------------------------------------- events: toolbar, rail, panel, drawer
+// ---------------------------------------------------------------- events: toolbar, panel, drawer
 $$(".tool[data-tool]").forEach((b) => b.addEventListener("click", () => { setTool(b.dataset.tool); b.blur(); }));
 $("#btn-fit").addEventListener("click", (e) => { fit(); e.currentTarget.blur(); });
 $("#btn-undo").addEventListener("click", (e) => { undo(); e.currentTarget.blur(); });

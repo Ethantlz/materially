@@ -90,6 +90,12 @@ def test_job_url_redirects_to_takeoff(client):
     assert r.status_code in (302, 307) and r.headers["location"].endswith(f"/jobs/{JOB_ID}/takeoff")
 
 
+def test_takeoff_copy_says_left_and_refresh_guards_the_alternate():
+    js = (ROOT / "ui" / "static" / "takeoff.js").read_text(encoding="utf-8")
+    assert "on the right" not in js  # the conditions panel moved to the left
+    assert "alt !== S.altId" in js or "alt === S.altId" in js  # a stale answer for another alternate is dropped
+
+
 def test_every_testid_exists_on_its_page(client):
     pages = _pages(client)
     js = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "ui" / "static").glob("*.js"))
