@@ -72,6 +72,24 @@ def test_every_screen_renders(client):
         assert r.status_code == 200, url
 
 
+def test_sheet_select_has_names_not_scales(client):
+    page = client.get(f"/jobs/{JOB_ID}/takeoff").text
+    sel = page[page.index('data-testid="sheet-select"'):]
+    sel = sel[: sel.index("</select>")]
+    assert "A-601" in sel and "PARTITION TYPES" in sel
+    assert "NTS" not in sel and "= 1'" not in sel  # no scale in the dropdown
+    i_undo, i_scale = page.index('data-testid="tool-undo"'), page.index('data-testid="canvas-scale"')
+    assert 0 < i_scale - i_undo < 400  # the scale chip sits right after Undo
+    assert page.index('data-testid="cond-panel"') < page.index('data-testid="takeoff-canvas"')  # panel on the left
+    for tid in ("alt-select", "scan-partitions", "open-orders", "open-ewos", "open-tracking", "open-review"):
+        assert f'data-testid="{tid}"' in page
+
+
+def test_job_url_redirects_to_takeoff(client):
+    r = client.get(f"/jobs/{JOB_ID}", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"].endswith(f"/jobs/{JOB_ID}/takeoff")
+
+
 def test_every_testid_exists_on_its_page(client):
     pages = _pages(client)
     js = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "ui" / "static").glob("*.js"))

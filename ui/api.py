@@ -6,12 +6,13 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.db import get_db, jsonable, oid
 from contracts.schemas import GAUGES
 from extract.scale import COMMON_LABELS
+from projects.alternates import list_alternates
 from ui import standins
 from ui.common import (  # noqa: F401  (inches and reason_summary are re-exported for the tests)
     BOARD_LABELS, PALETTE, condition_views, discipline, inches, next_color, reason_summary, stud_text,
@@ -107,17 +108,18 @@ def index(request: Request):
 
 
 @router.get("/jobs/{job_id}")
-def job_page(request: Request, job_id: str):
-    job = _job(get_db(), job_id)
-    return _page(request, "job.html", job, "sheets", scale_labels=json.dumps(COMMON_LABELS))
+def job_page(job_id: str):
+    return RedirectResponse(f"/jobs/{job_id}/takeoff", status_code=307)
 
 
 @router.get("/jobs/{job_id}/takeoff")
-def takeoff_page(request: Request, job_id: str, sheet: str | None = None, cond: str | None = None, focus: str | None = None):
-    """The takeoff workspace: sheet rail, drawing canvas, conditions panel, quantities drawer."""
+def takeoff_page(request: Request, job_id: str, sheet: str | None = None, cond: str | None = None,
+                 focus: str | None = None, alt: str | None = None):
+    """The takeoff workspace: sheet dropdown, drawing canvas, conditions panel on the left, quantities drawer."""
     db = get_db()
     job = _job(db, job_id)
     sheets, conds = _sheets(db, job_id), _conditions(db, job_id)
+    alts = list_alternates(job_id)
     by_id = {s["id"]: s for s in sheets}
     focused = next((c for c in conds if c["id"] == focus), None)
     fsrc = (focused or {}).get("source") or {}
@@ -128,6 +130,7 @@ def takeoff_page(request: Request, job_id: str, sheet: str | None = None, cond: 
         "job": {"id": job["id"], "name": job["name"], "status": job.get("status")},
         "sheets": sheets, "conditions": conds, "sheet": current["id"] if current else None,
         "cond": cond if any(c["id"] == cond for c in conds) else None,
+        "alternates": alts, "alt": alt if any(a["id"] == alt for a in alts) else alts[0]["id"],
         "focus": {"condition": focused["id"], "tag": focused["type_tag"], "sheet": fsrc.get("sheet"), "bbox": fsrc.get("bbox")}
         if focused and fsrc.get("bbox") else None,
         "scaleLabels": COMMON_LABELS, "boards": BOARD_LABELS, "gauges": GAUGES, "palette": PALETTE,

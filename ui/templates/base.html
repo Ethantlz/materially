@@ -22,6 +22,7 @@
       <a href="/jobs/{{ job.id }}/pm" class="{{ 'on' if tab == 'pm' }}" data-testid="tab-pm">PM</a>
       <a href="/review?job_id={{ job.id }}" class="{{ 'on' if tab == 'review' }}" data-testid="tab-review">Review</a>
     </nav>
+    {% block bar %}{% endblock %}
     <div class="costwrap">
       <button type="button" class="cost" id="cost" data-testid="cost-badge" aria-expanded="false" title="Every model call on this job, logged in MongoDB"><i class="dot"></i><b id="cost-n">·</b> AI decisions · <b id="cost-usd">$·</b></button>
       <div class="costpop" id="cost-pop" data-testid="cost-detail" hidden></div>
