@@ -15,6 +15,7 @@ from pymongo.database import Database
 from app import jev, router
 from app.db import insert_or_review, oid, to_review
 from contracts.schemas import SHEET_KINDS
+from extract.materials import derive
 from extract.partitions import Block, partition_blocks
 from extract.rooms import find_rooms
 from extract.sheetinfo import PageText
@@ -93,6 +94,7 @@ def parse_block(db: Database, job_id: str, sheet: dict, block: Block) -> ObjectI
         **out["result"],
         "job_id": job_id,
         "source": {"sheet": sheet_id, "page": sheet["page"], "bbox": block.bbox},
+        "materials": derive(out["result"], block.text),
         "routing": {"task": "parse_partition", "model": out["model"], "escalated": out["escalated"]},
     }
     return insert_or_review(db, "conditions", doc, "extract.partition")
