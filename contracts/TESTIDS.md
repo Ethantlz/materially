@@ -4,6 +4,7 @@ Lane 3 appends one line per testid (append only; never rename). The demo script 
 
 Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, `{order}` for ids.
 `(js)` marks an element that JavaScript renders after load; tests check those in `ui/static` or the page's script.
+`ui/templates/job.html` and `ui/static/job.js` are unrouted since `/jobs/{job}` redirects to the takeoff (D5), so the ids only they render are marked `(retired)`.
 
 - nav-home | / | brand link to the projects page
 - tab-review-all | / | review queue link when no job is open (retired)
@@ -29,13 +30,13 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - sheet-grid | /jobs/{job} | sheet thumbnails (retired)
 - sheet-viewer | /jobs/{job} | full-size sheet dialog (retired)
 - viewer-close | /jobs/{job} | closes the sheet dialog (retired)
-- sheet-card | /jobs/{job} | one sheet (js)
-- sheet-no | /jobs/{job} | sheet number on a card (js)
-- sheet-kind | /jobs/{job} | sheet kind badge; partition sheets are highlighted (js)
-- sheet-jev | /jobs/{job} | Jev routing badge: confidence, or "review" when the two asks disagreed (js)
-- sheet-title | /jobs/{job} | sheet title (js)
-- sheet-scale | /jobs/{job} | scale picker (js)
-- sheet-scale-source | /jobs/{job} | where the scale came from (js)
+- sheet-card | /jobs/{job} | one sheet (js) (retired)
+- sheet-no | /jobs/{job} | sheet number on a card (js) (retired)
+- sheet-kind | /jobs/{job} | sheet kind badge; partition sheets are highlighted (js) (retired)
+- sheet-jev | /jobs/{job} | Jev routing badge: confidence, or "review" when the two asks disagreed (js) (retired)
+- sheet-title | /jobs/{job} | sheet title (js) (retired)
+- sheet-scale | /jobs/{job} | scale picker (js) (retired)
+- sheet-scale-source | /jobs/{job} | where the scale came from (js) (retired)
 - conditions-table | /jobs/{job}/conditions | conditions library
 - condition-row | /jobs/{job}/conditions | one condition
 - condition-link | /jobs/{job}/conditions | type tag link to the condition
@@ -93,8 +94,8 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 ## Rework: takeoff workspace, dark chrome, PO preview (lane 3)
 - tab-takeoff | /jobs/{job} | Takeoff tab (retired)
 - cost-detail | /jobs/{job} | per-task cost breakdown, opens when the cost badge is clicked
-- sheet-group | /jobs/{job} | one discipline group of sheets (js)
-- sheet-open | /jobs/{job} | "Open in takeoff" link on a sheet card (js)
+- sheet-group | /jobs/{job} | one discipline group of sheets (js) (retired)
+- sheet-open | /jobs/{job} | "Open in takeoff" link on a sheet card (js) (retired)
 - conditions-rejected | /jobs/{job}/conditions | banner listing parses rejected into review (only when there are some)
 - condition-rejected | /jobs/{job}/conditions | one rejected parse with its reason
 - condition-swatch | /jobs/{job}/conditions | condition colour swatch
@@ -199,3 +200,7 @@ Format: `- <testid> | <page> | <what it is>`. Pages use `{job}`, `{condition}`, 
 - tracking-row | /ui/jobs/{job}/panel/tracking | one order or EWO
 - tracking-empty | /ui/jobs/{job}/panel/tracking | shown when nothing has moved yet
 - review-panel | /ui/jobs/{job}/panel/review | the review popup
+- ewos-empty | /ui/jobs/{job}/panel/ewos | empty row of the field EWOs table (only when there are none)
+- ewo-table | /jobs/{job}/pm | field EWOs table on the PM page (the same partial the popup shows)
+- ewo-row | /jobs/{job}/pm | one field EWO on the PM page
+- ewos-empty | /jobs/{job}/pm | empty row of the PM page's field EWOs table
